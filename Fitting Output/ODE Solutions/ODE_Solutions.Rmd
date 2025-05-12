@@ -1,0 +1,732 @@
+---
+title: "Calculate_ODE_Solutions"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(cowplot)
+library(deSolve)
+library(rstan)
+library(coda)
+library(modelbased)
+library(shinystan)
+library(colorspace)
+library(bayesplot)
+```
+
+```{r}
+all_sum <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting Output/Draws/all_sum.csv")
+
+```
+
+```{r}
+DA_odemodel <- function(t, N, p) {
+  dN1dt = (p[1]*N[1]*(1-N[1]*p[2]*exp(p[8]*t)))-(p[3]*N[1]*N[2]/(1+p[7]*(N[2]-0.003333333)+p[3]*p[6]*N[1])) #equation for resource
+  dN2dt = (p[4]*p[3]*N[1]*N[2]/(1+p[7]*(N[2]-0.003333333)+p[3]*p[6]*N[1]))-p[5]*N[2] #equation for consumer
+  return(list(c(dN1dt, dN2dt)))
+}
+```
+
+```{r}
+HDA_odemodel <- function(t, N, p) {
+  dN1dt = (p[1]*N[1]*(1-N[1]*p[2]*exp(p[8]*t)))-(p[3]*N[1]*N[2]/(1+p[7]*(N[2]-0.003333333)+p[3]*p[6]*N[1]))
+  
+  dN2dt = ((p[4]*p[3]*N[1]*N[2])/((1+p[7]*(N[2]-0.003333333))+(p[3]*p[6]*N[1])))-((p[9]*N[2]*N[3])/((1+p[13]*(N[3]-0.003333333))+(p[9]*p[12]*N[2])))-(p[5]*N[2])
+  
+  dN3dt = ((p[10]*p[9]*N[2]*N[3])/((1+p[13]*(N[3]-0.003333333))+(p[9]*p[12]*N[2])))-(p[11]*N[3])
+  
+  return(list(c(dN1dt, dN2dt, dN3dt)))
+}
+```
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////// CALCULATE ODE SOLUTIONS FROM POSTERIOR MEDIANS //////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+CALCULATE AVG INITIAL VALUES FOR TWO SPECIES
+
+```{r}
+DA_14_N1_0 <- all_sum %>%
+   filter(TL == "2", Temp == 14, Parameter %in% c("N1_0[1]", "N1_0[2]", "N1_0[3]", "N1_0[4]", "N1_0[5]"))
+
+DA_14_N1_0_avg <- mean(DA_14_N1_0$Q50)
+
+DA_14_N2_0 <- all_sum %>%
+   filter(TL == "2", Temp == 14, Parameter %in% c("N2_0[1]", "N2_0[2]", "N2_0[3]", "N2_0[4]", "N2_0[5]"))
+
+DA_14_N2_0_avg <- mean(DA_14_N2_0$Q50)
+```
+
+```{r}
+DA_17_N1_0 <- all_sum %>%
+   filter(TL == "2", Temp == 17, Parameter %in% c("N1_0[1]", "N1_0[2]", "N1_0[3]", "N1_0[4]", "N1_0[5]"))
+
+DA_17_N1_0_avg <- mean(DA_17_N1_0$Q50)
+
+DA_17_N2_0 <- all_sum %>%
+   filter(TL == "2", Temp == 17, Parameter %in% c("N2_0[1]", "N2_0[2]", "N2_0[3]", "N2_0[4]", "N2_0[5]"))
+
+DA_17_N2_0_avg <- mean(DA_17_N2_0$Q50)
+
+```
+
+```{r}
+DA_20_N1_0 <- all_sum %>%
+   filter(TL == "2", Temp == 20, Parameter %in% c("N1_0[1]", "N1_0[2]", "N1_0[3]", "N1_0[4]", "N1_0[5]"))
+
+DA_20_N1_0_avg <- mean(DA_20_N1_0$Q50)
+
+DA_20_N2_0 <- all_sum %>%
+   filter(TL == "2", Temp == 20, Parameter %in% c("N2_0[1]", "N2_0[2]", "N2_0[3]", "N2_0[4]", "N2_0[5]"))
+
+DA_20_N2_0_avg <- mean(DA_20_N2_0$Q50)
+```
+
+```{r}
+DA_23_N1_0 <- all_sum %>%
+   filter(TL == "2", Temp == 23, Parameter %in% c("N1_0[1]", "N1_0[2]", "N1_0[3]", "N1_0[4]", "N1_0[5]"))
+
+DA_23_N1_0_avg <- mean(DA_23_N1_0$Q50)
+
+DA_23_N2_0 <- all_sum %>%
+   filter(TL == "2", Temp == 23, Parameter %in% c("N2_0[1]", "N2_0[2]", "N2_0[3]", "N2_0[4]", "N2_0[5]"))
+
+DA_23_N2_0_avg <- mean(DA_23_N2_0$Q50)
+```
+
+```{r}
+DA_26_N1_0 <- all_sum %>%
+   filter(TL == "2", Temp == 26, Parameter %in% c("N1_0[1]", "N1_0[2]", "N1_0[3]", "N1_0[4]", "N1_0[5]"))
+
+DA_26_N1_0_avg <- mean(DA_26_N1_0$Q50)
+
+DA_26_N2_0 <- all_sum %>%
+   filter(TL == "2", Temp == 26, Parameter %in% c("N2_0[1]", "N2_0[2]", "N2_0[3]", "N2_0[4]", "N2_0[5]"))
+
+DA_26_N2_0_avg <- mean(DA_26_N2_0$Q50)
+```
+
+CALCULATE AVG INITIAL VALUES FOR THREE SPECIES
+
+```{r}
+HDA_14_N1_0 <- all_sum %>%
+   filter(TL == "3", Temp == 14, Parameter %in% c("N1_0[1]", "N1_0[2]", "N1_0[3]", "N1_0[4]", "N1_0[5]"))
+
+HDA_14_N1_0_avg <- mean(HDA_14_N1_0$Q50)
+
+HDA_14_N2_0 <- all_sum %>%
+   filter(TL == "3", Temp == 14, Parameter %in% c("N2_0[1]", "N2_0[2]", "N2_0[3]", "N2_0[4]", "N2_0[5]"))
+
+HDA_14_N2_0_avg <- mean(HDA_14_N2_0$Q50)
+
+HDA_14_N3_0 <- all_sum %>%
+   filter(TL == "3", Temp == 14, Parameter %in% c("N3_0[1]", "N3_0[2]", "N3_0[3]", "N3_0[4]", "N3_0[5]"))
+
+HDA_14_N3_0_avg <- mean(HDA_14_N3_0$Q50)
+```
+
+```{r}
+HDA_17_N1_0 <- all_sum %>%
+   filter(TL == "3", Temp == 17, Parameter %in% c("N1_0[1]", "N1_0[2]", "N1_0[3]", "N1_0[4]", "N1_0[5]"))
+
+HDA_17_N1_0_avg <- mean(HDA_17_N1_0$Q50)
+
+HDA_17_N2_0 <- all_sum %>%
+   filter(TL == "3", Temp == 17, Parameter %in% c("N2_0[1]", "N2_0[2]", "N2_0[3]", "N2_0[4]", "N2_0[5]"))
+
+HDA_17_N2_0_avg <- mean(HDA_17_N2_0$Q50)
+
+HDA_17_N3_0 <- all_sum %>%
+   filter(TL == "3", Temp == 17, Parameter %in% c("N3_0[1]", "N3_0[2]", "N3_0[3]", "N3_0[4]", "N3_0[5]"))
+
+HDA_17_N3_0_avg <- mean(HDA_17_N3_0$Q50)
+```
+
+```{r}
+HDA_20_N1_0 <- all_sum %>%
+   filter(TL == "3", Temp == 20, Parameter %in% c("N1_0[1]", "N1_0[2]", "N1_0[3]", "N1_0[4]", "N1_0[5]"))
+
+HDA_20_N1_0_avg <- mean(HDA_20_N1_0$Q50)
+
+HDA_20_N2_0 <- all_sum %>%
+   filter(TL == "3", Temp == 20, Parameter %in% c("N2_0[1]", "N2_0[2]", "N2_0[3]", "N2_0[4]", "N2_0[5]"))
+
+HDA_20_N2_0_avg <- mean(HDA_20_N2_0$Q50)
+
+HDA_20_N3_0 <- all_sum %>%
+   filter(TL == "3", Temp == 20, Parameter %in% c("N3_0[1]", "N3_0[2]", "N3_0[3]", "N3_0[4]", "N3_0[5]"))
+
+HDA_20_N3_0_avg <- mean(HDA_20_N3_0$Q50)
+```
+
+```{r}
+HDA_23_N1_0 <- all_sum %>%
+   filter(TL == "3", Temp == 23, Parameter %in% c("N1_0[1]", "N1_0[2]", "N1_0[3]", "N1_0[4]", "N1_0[5]"))
+
+HDA_23_N1_0_avg <- mean(HDA_23_N1_0$Q50)
+
+HDA_23_N2_0 <- all_sum %>%
+   filter(TL == "3", Temp == 23, Parameter %in% c("N2_0[1]", "N2_0[2]", "N2_0[3]", "N2_0[4]", "N2_0[5]"))
+
+HDA_23_N2_0_avg <- mean(HDA_23_N2_0$Q50)
+
+HDA_23_N3_0 <- all_sum %>%
+   filter(TL == "3", Temp == 23, Parameter %in% c("N3_0[1]", "N3_0[2]", "N3_0[3]", "N3_0[4]", "N3_0[5]"))
+
+HDA_23_N3_0_avg <- mean(HDA_23_N3_0$Q50)
+```
+
+```{r}
+HDA_26_N1_0 <- all_sum %>%
+   filter(TL == "3", Temp == 26, Parameter %in% c("N1_0[1]", "N1_0[2]", "N1_0[3]", "N1_0[4]", "N1_0[5]"))
+
+HDA_26_N1_0_avg <- mean(HDA_26_N1_0$Q50)
+
+HDA_26_N2_0 <- all_sum %>%
+   filter(TL == "3", Temp == 26, Parameter %in% c("N2_0[1]", "N2_0[2]", "N2_0[3]", "N2_0[4]", "N2_0[5]"))
+
+HDA_26_N2_0_avg <- mean(HDA_26_N2_0$Q50)
+
+HDA_26_N3_0 <- all_sum %>%
+   filter(TL == "3", Temp == 26, Parameter %in% c("N3_0[1]", "N3_0[2]", "N3_0[3]", "N3_0[4]", "N3_0[5]"))
+
+HDA_26_N3_0_avg <- mean(HDA_26_N3_0$Q50)
+```
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////// TWO SPECIES TREATMENT ////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+```{r}
+DA_14_sol <- as.data.frame(lsoda(y = c(DA_14_N1_0_avg, 
+                                       DA_14_N2_0_avg),
+                             times = seq(0,35, by = 0.01),
+                             func = DA_odemodel,
+                             parms = c((all_sum %>%
+                                        filter(Parameter == "r", Temp == 14, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "Q", Temp == 14, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "a1", Temp == 14, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "e1", Temp == 14, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "d1", Temp == 14, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "h1", Temp == 14, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w1", Temp == 14, TL == 2))$Q50,
+                                      (all_sum %>%
+                                        filter(Parameter == "B", Temp == 14, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "a2", Temp == 14, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "e2", Temp == 14, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "d2", Temp == 14, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "h2", Temp == 14, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w2", Temp == 14, TL == 2))$Q50)))
+```
+
+```{r}
+DA_14_daph_ts <- data.frame(days.since.start = DA_14_sol[,1], SppPerML = DA_14_sol[,3])
+
+DA_14_daph_ts$Species <- "Daph"
+
+DA_14_alg_ts <- data.frame(days.since.start = DA_14_sol[,1], SppPerML = DA_14_sol[,2])
+
+DA_14_alg_ts$Species <- "Ank"
+
+DA_14_full_ts <- rbind(DA_14_daph_ts, DA_14_alg_ts)
+
+DA_14_full_ts$Temp <- 14
+
+DA_14_full_ts$TL <- 2
+```
+
+
+```{r}
+DA_17_sol <- as.data.frame(lsoda(y = c(DA_17_N1_0_avg, 
+                                       DA_17_N2_0_avg),
+                             times = seq(0,35, by = 0.01),
+                             func = DA_odemodel,
+                             parms = c((all_sum %>%
+                                        filter(Parameter == "r", Temp == 17, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "Q", Temp == 17, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "a1", Temp == 17, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "e1", Temp == 17, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "d1", Temp == 17, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "h1", Temp == 17, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w1", Temp == 17, TL == 2))$Q50,
+                                      (all_sum %>%
+                                        filter(Parameter == "B", Temp == 17, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "a2", Temp == 17, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "e2", Temp == 17, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "d2", Temp == 17, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "h2", Temp == 17, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w2", Temp == 17, TL == 2))$Q50)))
+```
+
+```{r}
+DA_17_daph_ts <- data.frame(days.since.start = DA_17_sol[,1], SppPerML = DA_17_sol[,3])
+
+DA_17_daph_ts$Species <- "Daph"
+
+DA_17_alg_ts <- data.frame(days.since.start = DA_17_sol[,1], SppPerML = DA_17_sol[,2])
+
+DA_17_alg_ts$Species <- "Ank"
+
+DA_17_full_ts <- rbind(DA_17_daph_ts, DA_17_alg_ts)
+
+DA_17_full_ts$Temp <- 17
+
+DA_17_full_ts$TL <- 2
+```
+
+```{r}
+DA_20_sol <- as.data.frame(lsoda(y = c(DA_20_N1_0_avg, 
+                                       DA_20_N2_0_avg),
+                             times = seq(0,35, by = 0.01),
+                             func = DA_odemodel,
+                             parms = c((all_sum %>%
+                                        filter(Parameter == "r", Temp == 20, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "Q", Temp == 20, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "a1", Temp == 20, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "e1", Temp == 20, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "d1", Temp == 20, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "h1", Temp == 20, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w1", Temp == 20, TL == 2))$Q50,
+                                      (all_sum %>%
+                                        filter(Parameter == "B", Temp == 20, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "a2", Temp == 20, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "e2", Temp == 20, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "d2", Temp == 20, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "h2", Temp == 20, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w2", Temp == 20, TL == 2))$Q50)))
+```
+
+```{r}
+DA_20_daph_ts <- data.frame(days.since.start = DA_20_sol[,1], SppPerML = DA_20_sol[,3])
+
+DA_20_daph_ts$Species <- "Daph"
+
+DA_20_alg_ts <- data.frame(days.since.start = DA_20_sol[,1], SppPerML = DA_20_sol[,2])
+
+DA_20_alg_ts$Species <- "Ank"
+
+DA_20_full_ts <- rbind(DA_20_daph_ts, DA_20_alg_ts)
+
+DA_20_full_ts$Temp <- 20
+
+DA_20_full_ts$TL <- 2
+```
+
+```{r}
+DA_23_sol <- as.data.frame(lsoda(y =c(DA_23_N1_0_avg, 
+                                      DA_23_N2_0_avg),
+                             times = seq(0,35, by = 0.01),
+                             func = DA_odemodel,
+                             parms = c((all_sum %>%
+                                        filter(Parameter == "r", Temp == 23, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "Q", Temp == 23, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "a1", Temp == 23, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "e1", Temp == 23, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "d1", Temp == 23, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "h1", Temp == 23, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w1", Temp == 23, TL == 2))$Q50,
+                                      (all_sum %>%
+                                        filter(Parameter == "B", Temp == 23, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "a2", Temp == 23, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "e2", Temp == 23, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "d2", Temp == 23, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "h2", Temp == 23, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w2", Temp == 23, TL == 2))$Q50)))
+```
+
+```{r}
+DA_23_daph_ts <- data.frame(days.since.start = DA_23_sol[,1], SppPerML = DA_23_sol[,3])
+
+DA_23_daph_ts$Species <- "Daph"
+
+DA_23_alg_ts <- data.frame(days.since.start = DA_23_sol[,1], SppPerML = DA_23_sol[,2])
+
+DA_23_alg_ts$Species <- "Ank"
+
+DA_23_full_ts <- rbind(DA_23_daph_ts, DA_23_alg_ts)
+
+DA_23_full_ts$Temp <- 23
+
+DA_23_full_ts$TL <- 2
+```
+
+
+```{r}
+DA_26_sol <- as.data.frame(lsoda(y = c(DA_26_N1_0_avg, 
+                                       DA_26_N2_0_avg),
+                             times = seq(0,35, by = 0.01),
+                             func = DA_odemodel,
+                             parms = c((all_sum %>%
+                                        filter(Parameter == "r", Temp == 26, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "Q", Temp == 26, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "a1", Temp == 26, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "e1", Temp == 26, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "d1", Temp == 26, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "h1", Temp == 26, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w1", Temp == 26, TL == 2))$Q50,
+                                      (all_sum %>%
+                                        filter(Parameter == "B", Temp == 26, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "a2", Temp == 26, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "e2", Temp == 26, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "d2", Temp == 26, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "h2", Temp == 26, TL == 2))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w2", Temp == 26, TL == 2))$Q50)))
+```
+
+```{r}
+DA_26_daph_ts <- data.frame(days.since.start = DA_26_sol[,1], SppPerML = DA_26_sol[,3])
+
+DA_26_daph_ts$Species <- "Daph"
+
+DA_26_alg_ts <- data.frame(days.since.start = DA_26_sol[,1], SppPerML = DA_26_sol[,2])
+
+DA_26_alg_ts$Species <- "Ank"
+
+DA_26_full_ts <- rbind(DA_26_daph_ts, DA_26_alg_ts)
+
+DA_26_full_ts$Temp <- 26
+
+DA_26_full_ts$TL <- 2
+```
+
+```{r}
+DA_full_ts <- rbind(DA_14_full_ts, DA_17_full_ts, DA_20_full_ts, DA_23_full_ts, DA_26_full_ts)
+```
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////// THREE SPECIES TREATMENT //////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+```{r}
+HDA_14_sol <- as.data.frame(lsoda(y = c(HDA_14_N1_0_avg, 
+                                        HDA_14_N2_0_avg,
+                                        HDA_14_N3_0_avg),
+                             times = seq(0,35, by = 0.01),
+                             func = HDA_odemodel,
+                             parms = c((all_sum %>%
+                                        filter(Parameter == "r", Temp == 14, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "Q", Temp == 14, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "a1", Temp == 14, TL == 3))$Q50,
+                                       5.447609e-04, #e1
+                                       2.448435e+00, #d1
+                                       (all_sum %>%
+                                        filter(Parameter == "h1", Temp == 14, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w1", Temp == 14, TL == 3))$Q50,
+                                       1.811345e-02, #B 
+                                       (all_sum %>%
+                                        filter(Parameter == "a2", Temp == 14, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "e2", Temp == 14, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "d2", Temp == 14, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "h2", Temp == 14, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w2", Temp == 14, TL == 3))$Q50)))
+
+```
+
+```{r}
+HDA_14_hydra_ts <- data.frame(days.since.start = HDA_14_sol[,1], SppPerML = HDA_14_sol[,4])
+
+HDA_14_hydra_ts$Species <- "Hydra"
+
+HDA_14_daph_ts <- data.frame(days.since.start = HDA_14_sol[,1], SppPerML = HDA_14_sol[,3])
+
+HDA_14_daph_ts$Species <- "Daph"
+
+HDA_14_alg_ts <- data.frame(days.since.start = HDA_14_sol[,1], SppPerML = HDA_14_sol[,2])
+
+HDA_14_alg_ts$Species <- "Ank"
+
+HDA_14_full_ts <- rbind(HDA_14_hydra_ts, HDA_14_daph_ts, HDA_14_alg_ts)
+
+HDA_14_full_ts$Temp <- 14
+
+HDA_14_full_ts$TL <- 3
+```
+
+```{r}
+HDA_17_sol <- as.data.frame(lsoda(y = c(HDA_17_N1_0_avg, 
+                                        HDA_17_N2_0_avg,
+                                        HDA_17_N3_0_avg),
+                             times = seq(0,35, by = 0.01),
+                             func = HDA_odemodel,
+                             parms = c((all_sum %>%
+                                        filter(Parameter == "r", Temp == 17, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "Q", Temp == 17, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "a1", Temp == 17, TL == 3))$Q50,
+                                       2.455467e-05, # e1
+                                       1.125211e+00, #d1
+                                       (all_sum %>%
+                                        filter(Parameter == "h1", Temp == 17, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w1", Temp == 17, TL == 3))$Q50,
+                                       7.995986e-02, #B 
+                                       (all_sum %>%
+                                        filter(Parameter == "a2", Temp == 17, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "e2", Temp == 17, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "d2", Temp == 17, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "h2", Temp == 17, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w2", Temp == 17, TL == 3))$Q50)))
+```
+
+
+```{r}
+HDA_17_hydra_ts <- data.frame(days.since.start = HDA_17_sol[,1], SppPerML = HDA_17_sol[,4])
+
+HDA_17_hydra_ts$Species <- "Hydra"
+
+HDA_17_daph_ts <- data.frame(days.since.start = HDA_17_sol[,1], SppPerML = HDA_17_sol[,3])
+
+HDA_17_daph_ts$Species <- "Daph"
+
+HDA_17_alg_ts <- data.frame(days.since.start = HDA_17_sol[,1], SppPerML = HDA_17_sol[,2])
+
+HDA_17_alg_ts$Species <- "Ank"
+
+HDA_17_full_ts <- rbind(HDA_17_hydra_ts, HDA_17_daph_ts, HDA_17_alg_ts)
+
+HDA_17_full_ts$Temp <- 17
+
+HDA_17_full_ts$TL <- 3
+```
+
+```{r}
+HDA_20_sol <- as.data.frame(lsoda(y = c(HDA_20_N1_0_avg, 
+                                        HDA_20_N2_0_avg,
+                                        HDA_20_N3_0_avg),
+                             times = seq(0,35, by = 0.01),
+                             func = HDA_odemodel,
+                             parms = c((all_sum %>%
+                                        filter(Parameter == "r", Temp == 20, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "Q", Temp == 20, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "a1", Temp == 20, TL == 3))$Q50,
+                                       4.437980e-05, #e1
+                                       1.988016e+00, #d1
+                                       (all_sum %>%
+                                        filter(Parameter == "h1", Temp == 20, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w1", Temp == 20, TL == 3))$Q50,
+                                       8.957620e-02, #B  
+                                       (all_sum %>%
+                                        filter(Parameter == "a2", Temp == 20, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "e2", Temp == 20, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "d2", Temp == 20, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "h2", Temp == 20, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w2", Temp == 20, TL == 3))$Q50)))
+```
+
+```{r}
+HDA_20_hydra_ts <- data.frame(days.since.start = HDA_20_sol[,1], SppPerML = HDA_20_sol[,4])
+
+HDA_20_hydra_ts$Species <- "Hydra"
+
+HDA_20_daph_ts <- data.frame(days.since.start = HDA_20_sol[,1], SppPerML = HDA_20_sol[,3])
+
+HDA_20_daph_ts$Species <- "Daph"
+
+HDA_20_alg_ts <- data.frame(days.since.start = HDA_20_sol[,1], SppPerML = HDA_20_sol[,2])
+
+HDA_20_alg_ts$Species <- "Ank"
+
+HDA_20_full_ts <- rbind(HDA_20_hydra_ts, HDA_20_daph_ts, HDA_20_alg_ts)
+
+HDA_20_full_ts$Temp <- 20
+
+HDA_20_full_ts$TL <- 3
+```
+
+
+```{r}
+HDA_23_sol <- as.data.frame(lsoda(y = c(HDA_23_N1_0_avg, 
+                                        HDA_23_N2_0_avg,
+                                        HDA_23_N3_0_avg),
+                             times = seq(0,35, by = 0.01),
+                             func = HDA_odemodel,
+                             parms = c((all_sum %>%
+                                        filter(Parameter == "r", Temp == 23, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "Q", Temp == 23, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "a1", Temp == 23, TL == 3))$Q50,
+                                       1.021355e-05, # e1
+                                       1.943547e+00, #d1
+                                       (all_sum %>%
+                                        filter(Parameter == "h1", Temp == 23, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w1", Temp == 23, TL == 3))$Q50,
+                                       7.738450e-02, #B 
+                                       (all_sum %>%
+                                        filter(Parameter == "a2", Temp == 23, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "e2", Temp == 23, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "d2", Temp == 23, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "h2", Temp == 23, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w2", Temp == 23, TL == 3))$Q50)))
+```
+
+```{r}
+HDA_23_hydra_ts <- data.frame(days.since.start = HDA_23_sol[,1], SppPerML = HDA_23_sol[,4])
+
+HDA_23_hydra_ts$Species <- "Hydra"
+
+HDA_23_daph_ts <- data.frame(days.since.start = HDA_23_sol[,1], SppPerML = HDA_23_sol[,3])
+
+HDA_23_daph_ts$Species <- "Daph"
+
+HDA_23_alg_ts <- data.frame(days.since.start = HDA_23_sol[,1], SppPerML = HDA_23_sol[,2])
+
+HDA_23_alg_ts$Species <- "Ank"
+
+HDA_23_full_ts <- rbind(HDA_23_hydra_ts, HDA_23_daph_ts, HDA_23_alg_ts)
+
+HDA_23_full_ts$Temp <- 23
+
+HDA_23_full_ts$TL <- 3
+```
+
+
+```{r}
+HDA_26_sol <- as.data.frame(lsoda(y = c(HDA_26_N1_0_avg, 
+                                        HDA_26_N2_0_avg,
+                                        HDA_26_N3_0_avg),
+                             times = seq(0,35, by = 0.01),
+                             func = HDA_odemodel,
+                             parms = c((all_sum %>%
+                                        filter(Parameter == "r", Temp == 26, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "Q", Temp == 26, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "a1", Temp == 26, TL == 3))$Q50,
+                                       5.038341e-05, #e1
+                                       4.095059e+00, #d1
+                                       (all_sum %>%
+                                        filter(Parameter == "h1", Temp == 26, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w1", Temp == 26, TL == 3))$Q50,
+                                       9.847838e-02, #B
+                                       (all_sum %>%
+                                        filter(Parameter == "a2", Temp == 26, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "e2", Temp == 26, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "d2", Temp == 26, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "h2", Temp == 26, TL == 3))$Q50,
+                                       (all_sum %>%
+                                        filter(Parameter == "w2", Temp == 26, TL == 3))$Q50)))
+```
+
+```{r}
+HDA_26_hydra_ts <- data.frame(days.since.start = HDA_26_sol[,1], SppPerML = HDA_26_sol[,4])
+
+HDA_26_hydra_ts$Species <- "Hydra"
+
+HDA_26_daph_ts <- data.frame(days.since.start = HDA_26_sol[,1], SppPerML = HDA_26_sol[,3])
+
+HDA_26_daph_ts$Species <- "Daph"
+
+HDA_26_alg_ts <- data.frame(days.since.start = HDA_26_sol[,1], SppPerML = HDA_26_sol[,2])
+
+HDA_26_alg_ts$Species <- "Ank"
+
+HDA_26_full_ts <- rbind(HDA_26_hydra_ts, HDA_26_daph_ts, HDA_26_alg_ts)
+
+HDA_26_full_ts$Temp <- 26
+
+HDA_26_full_ts$TL <- 3
+```
+
+```{r}
+HDA_full_ts <- rbind(HDA_14_full_ts, HDA_17_full_ts, HDA_20_full_ts, HDA_23_full_ts, HDA_26_full_ts)
+```
+
+```{r}
+full_ts_data <- rbind(DA_full_ts, HDA_full_ts)
+
+write.csv(full_ts_data, file = "full_ts_data.csv", row.names = FALSE)
+```
+
+
+
+
