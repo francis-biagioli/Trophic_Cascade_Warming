@@ -1,0 +1,79 @@
+---
+title: "Fit_Summary_Data"
+output: html_document
+---
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(cowplot)
+library(deSolve)
+library(rstan)
+library(coda)
+library(modelbased)
+library(shinystan)
+library(colorspace)
+library(bayesplot)
+```
+
+```{r}
+DA_14_sum <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/DA_14/DA_14_draws_sum.csv")
+DA_17_sum <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/DA_17/DA_17_pars_sum.csv")
+DA_20_sum <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/DA_20/DA_20_pars_sum.csv")
+DA_23_sum <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/DA_23/DA_23_pars_sum.csv")
+DA_26_sum <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/DA_26/DA_26_pars_sum.csv")
+```
+
+
+```{r}
+HDA_14_sum <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_14/HDA_14_pars_sum.csv")
+HDA_17_sum <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_17/HDA_17_pars_sum.csv")
+HDA_20_sum <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_20/HDA_20_pars_sum.csv")
+HDA_23_sum <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_23/HDA_23_pars_sum.csv")
+HDA_26_sum <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_26/HDA_26_pars_sum.csv")
+```
+
+```{r}
+DA_14_sum$Temp <- 14
+DA_14_sum$TL <- 2
+
+DA_17_sum$Temp <- 17
+DA_17_sum$TL <- 2
+
+DA_20_sum$Temp <- 20
+DA_20_sum$TL <- 2
+
+DA_23_sum$Temp <- 23
+DA_23_sum$TL <- 2
+
+DA_26_sum$Temp <- 26
+DA_26_sum$TL <- 2
+```
+
+
+```{r}
+
+HDA_14_sum$Temp <- 14
+HDA_14_sum$TL <- 3
+
+HDA_17_sum$Temp <- 17
+HDA_17_sum$TL <- 3
+
+HDA_20_sum$Temp <- 20
+HDA_20_sum$TL <- 3
+
+HDA_23_sum$Temp <- 23
+HDA_23_sum$TL <- 3
+
+HDA_26_sum$Temp <- 26
+HDA_26_sum$TL <- 3
+```
+
+```{r}
+all_sum <- rbind(DA_14_sum, DA_17_sum, DA_20_sum, DA_23_sum, DA_26_sum, HDA_14_sum, HDA_17_sum, HDA_20_sum, HDA_23_sum, HDA_26_sum)
+```
+
+
+```{r}
+write.csv(all_sum, file = "all_sum.csv", row.names = FALSE)
+```
+
