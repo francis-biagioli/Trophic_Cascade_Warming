@@ -1,0 +1,201 @@
+---
+title: "Pars_Estimate_Tables"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(cowplot)
+library(deSolve)
+library(rstan)
+library(coda)
+library(modelbased)
+library(shinystan)
+library(msm)
+library(knitr)
+library(kableExtra)
+```
+
+```{r}
+load("~/Trophic_Cascade_Warming_Submission/Fitting/DA_14/DA_14_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/DA_17/DA_17_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/DA_20/DA_20_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/DA_23/DA_23_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/DA_26/DA_26_fit")
+```
+
+```{r}
+load("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_14/HDA_14_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_17/HDA_17_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_20/HDA_20_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_23/HDA_23_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_26/HDA_26_fit")
+```
+
+```{r}
+smart_format <- function(x, digits_std = 2, digits_sci = 2) {
+  ifelse(abs(x) < 0.001 | abs(x) >= 1e5,
+         formatC(x, format = "e", digits = digits_sci),
+         formatC(x, format = "f", digits = digits_std))
+}
+```
+
+```{r}
+DA_14_sum <- summary(DA_14_fit)$summary %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Parameter")
+
+# Apply smart formatting to all numeric columns
+DA_14_sum_formatted <- DA_14_sum %>%
+  select(-Rhat) %>%
+  mutate(across(where(is.numeric), ~ smart_format(.x)))
+
+DA_14_sum_table <- DA_14_sum_formatted %>%
+kable(format = "html", caption = "Temperature - 14°C, Trophic Levels - 2") %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+
+```
+
+```{r}
+DA_17_sum <- summary(DA_17_fit)$summary %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Parameter")
+
+# Apply smart formatting to all numeric columns
+DA_17_sum_formatted <- DA_17_sum %>%
+  select(-Rhat) %>%
+  mutate(across(where(is.numeric), ~ smart_format(.x)))
+
+DA_17_sum_table <- DA_17_sum_formatted %>%
+kable(format = "html", caption = "Temperature - 17°C, Trophic Levels - 2") %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+```
+
+```{r}
+DA_20_sum <- summary(DA_20_fit)$summary %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Parameter")
+
+# Apply smart formatting to all numeric columns
+DA_20_sum_formatted <- DA_20_sum %>%
+  select(-Rhat) %>%
+  mutate(across(where(is.numeric), ~ smart_format(.x)))
+
+DA_20_sum_table <- DA_20_sum_formatted %>%
+kable(format = "html", caption = "Temperature - 20°C, Trophic Levels - 2") %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+```
+
+```{r}
+DA_23_sum <- summary(DA_23_fit)$summary %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Parameter")
+
+# Apply smart formatting to all numeric columns
+DA_23_sum_formatted <- DA_23_sum %>%
+  select(-Rhat) %>%
+  mutate(across(where(is.numeric), ~ smart_format(.x)))
+
+DA_23_sum_table <- DA_23_sum_formatted %>%
+kable(format = "html", caption = "Temperature - 23°C, Trophic Levels - 2") %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+```
+
+```{r}
+DA_26_sum <- summary(DA_26_fit)$summary %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Parameter")
+
+# Apply smart formatting to all numeric columns
+DA_26_sum_formatted <- DA_26_sum %>%
+  select(-Rhat) %>%
+  mutate(across(where(is.numeric), ~ smart_format(.x)))
+
+DA_26_sum_table <- DA_26_sum_formatted %>%
+kable(format = "html", caption = "Temperature - 26°C, Trophic Levels - 2") %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+```
+
+
+```{r}
+HDA_14_sum <- summary(HDA_14_Pre_Uni_fit_a1w1h1_rQ)$summary %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Parameter")
+
+# Apply smart formatting to all numeric columns
+HDA_14_sum_formatted <- HDA_14_sum %>%
+  select(-Rhat) %>%
+  mutate(across(where(is.numeric), ~ smart_format(.x)))
+
+HDA_14_sum_table <- HDA_14_sum_formatted %>%
+kable(format = "html", caption = "Temperature - 14°C, Trophic Levels - 3") %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+```
+
+```{r}
+HDA_17_sum <- summary(HDA_17_Pred_Uni_fit_a1w1h1_rQ)$summary %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Parameter")
+
+# Apply smart formatting to all numeric columns
+HDA_17_sum_formatted <- HDA_17_sum %>%
+  select(-Rhat) %>%
+  mutate(across(where(is.numeric), ~ smart_format(.x)))
+
+HDA_17_sum_table <- HDA_17_sum_formatted %>%
+kable(format = "html", caption = "Temperature - 17°C, Trophic Levels - 3") %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+```
+
+```{r}
+HDA_20_sum <- summary(HDA_20_Pred_Uni_fit_a1w1h1_rQ)$summary %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Parameter")
+
+# Apply smart formatting to all numeric columns
+HDA_20_sum_formatted <- HDA_20_sum %>%
+  select(-Rhat) %>%
+  mutate(across(where(is.numeric), ~ smart_format(.x)))
+
+HDA_20_sum_table <- HDA_20_sum_formatted %>%
+kable(format = "html", caption = "Temperature - 20°C, Trophic Levels - 3") %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+```
+
+```{r}
+HDA_23_sum <- summary(HDA_23_Pred_Uni_fit_a1w1h1_rQ)$summary %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Parameter")
+
+# Apply smart formatting to all numeric columns
+HDA_23_sum_formatted <- HDA_23_sum %>%
+  select(-Rhat) %>%
+  mutate(across(where(is.numeric), ~ smart_format(.x)))
+
+HDA_23_sum_table <- HDA_23_sum_formatted %>%
+kable(format = "html", caption = "Temperature - 23°C, Trophic Levels - 3") %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+```
+
+```{r}
+HDA_26_sum <- summary(HDA_26_Pred_Uni_fit_a1w1h1_rQ)$summary %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Parameter")
+
+# Apply smart formatting to all numeric columns
+HDA_26_sum_formatted <- HDA_26_sum %>%
+  select(-Rhat) %>%
+  mutate(across(where(is.numeric), ~ smart_format(.x)))
+
+HDA_26_sum_table <- HDA_26_sum_formatted %>%
+kable(format = "html", caption = "Temperature - 26°C, Trophic Levels - 3") %>%
+  kable_classic(full_width = F, html_font = "Times New Roman")
+```
+
+
+
+
+
+
+

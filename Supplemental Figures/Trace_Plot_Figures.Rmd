@@ -1,0 +1,108 @@
+---
+title: "Trace_Plot_Figures"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(cowplot)
+library(deSolve)
+library(rstan)
+library(coda)
+library(modelbased)
+library(shinystan)
+library(msm)
+```
+
+LOAD IN FITS
+
+```{r}
+load("~/Trophic_Cascade_Warming_Submission/Fitting/DA_14/DA_14_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/DA_17/DA_17_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/DA_20/DA_20_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/DA_23/DA_23_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/DA_26/DA_26_fit")
+```
+
+```{r}
+load("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_14/HDA_14_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_17/HDA_17_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_20/HDA_20_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_23/HDA_23_fit")
+load("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_26/HDA_26_fit")
+```
+
+```{r}
+
+DA_14_trace <- rstan::traceplot(DA_14_fit, pars = c("r", "Q", "a1", "e1", "d1", "h1", "w1", "B", "sd_obs1", "sd_obs2", "N1_0", "N2_0"), inc_warmup = TRUE)
+
+ggsave("DA_14_trace.png", DA_14_trace, width =10 , height = 7, dpi = 200)
+
+```
+
+```{r}
+DA_17_trace <- rstan::traceplot(DA_17_fit, pars = c("r", "Q", "a1", "e1", "d1", "h1", "w1", "B", "sd_obs1", "sd_obs2", "N1_0", "N2_0"), inc_warmup = TRUE)
+
+ggsave("DA_17_trace.png", DA_17_trace, width =10 , height = 7, dpi = 200)
+```
+
+```{r}
+DA_20_trace <- rstan::traceplot(DA_20_fit, pars = c("r", "Q", "a1", "e1", "d1", "h1", "w1", "B", "sd_obs1", "sd_obs2", "N1_0", "N2_0"), inc_warmup = TRUE)
+
+ggsave("DA_20_trace.png", DA_20_trace, width =10 , height = 7, dpi = 200)
+```
+
+```{r}
+DA_23_trace <- rstan::traceplot(DA_23_fit, pars = c("r", "Q", "a1", "e1", "d1", "h1", "w1", "B", "sd_obs1", "sd_obs2", "N1_0", "N2_0"), inc_warmup = TRUE)
+
+ggsave("DA_23_trace.png", DA_23_trace, width =10 , height = 7, dpi = 200)
+```
+
+```{r}
+DA_26_trace <- rstan::traceplot(DA_26_fit, pars = c("r", "Q", "a1", "e1", "d1", "h1", "w1", "B", "sd_obs1", "sd_obs2", "N1_0", "N2_0"), inc_warmup = TRUE)
+
+ggsave("DA_26_trace.png", DA_26_trace, width =10 , height = 7, dpi = 200)
+```
+
+```{r}
+HDA_14_trace <- rstan::traceplot(HDA_14_Pre_Uni_fit_a1w1h1_rQ, pars = c("r", "Q", "a1", "h1", "w1","a2", "e2", "d2", "h2", "w2", "sd_obs1", "sd_obs2", "sd_obs3", "N1_0", "N2_0", "N3_0"), inc_warmup = TRUE)
+
+ggsave("HDA_14_trace.png", HDA_14_trace, width =10 , height = 7, dpi = 200)
+```
+
+```{r}
+HDA_17_trace <- rstan::traceplot(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = c("r", "Q", "a1", "h1", "w1","a2", "e2", "d2", "h2", "w2", "sd_obs1", "sd_obs2", "sd_obs3", "N1_0", "N2_0", "N3_0"), inc_warmup = TRUE)
+
+ggsave("HDA_17_trace.png", HDA_17_trace, width =10 , height = 7, dpi = 200)
+```
+
+```{r}
+HDA_20_trace <- rstan::traceplot(HDA_20_Pred_Uni_fit_a1w1h1_rQ, pars = c("r", "Q", "a1", "h1", "w1","a2", "e2", "d2", "h2", "w2", "sd_obs1", "sd_obs2", "sd_obs3", "N1_0", "N2_0", "N3_0"), inc_warmup = TRUE)
+
+ggsave("HDA_20_trace.png", HDA_20_trace, width =10 , height = 7, dpi = 200)
+```
+
+```{r}
+HDA_23_trace <- rstan::traceplot(HDA_23_Pred_Uni_fit_a1w1h1_rQ, pars = c("r", "Q", "a1", "h1", "w1","a2", "e2", "d2", "h2", "w2", "sd_obs1", "sd_obs2", "sd_obs3", "N1_0", "N2_0", "N3_0"), inc_warmup = TRUE)
+
+ggsave("HDA_23_trace.png", HDA_23_trace, width =10 , height = 7, dpi = 200)
+```
+
+```{r}
+HDA_26_trace <- rstan::traceplot(HDA_26_Pred_Uni_fit_a1w1h1_rQ, pars = c("r", "Q", "a1", "h1", "w1","a2", "e2", "d2", "h2", "w2", "sd_obs1", "sd_obs2", "sd_obs3", "N1_0", "N2_0", "N3_0"), inc_warmup = TRUE)
+
+ggsave("HDA_26_trace.png", HDA_26_trace, width =10 , height = 7, dpi = 200)
+```
+
+
+
+
+
+
+
+
+
+
+
+
