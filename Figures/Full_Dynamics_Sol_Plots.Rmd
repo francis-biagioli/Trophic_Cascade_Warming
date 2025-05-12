@@ -1,0 +1,304 @@
+---
+title: "Full Sol Plotting"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(cowplot)
+library(deSolve)
+library(rstan)
+library(coda)
+library(modelbased)
+library(shinystan)
+library(colorspace)
+library(bayesplot)
+library(ggpubr)
+library(rphylopic)
+```
+
+```{r}
+#read in Raw Data
+setwd("~/Trophic_Cascade_Warming_Submission")
+
+TCTempDataFull <- read.csv("TC_Temp_Data_Full.csv")
+```
+
+```{r}
+#Read in solution data
+
+setwd("/Users/francisbiagioli/Documents/R/Trophic_Cascade_Warming_Submission/Fitting Output/ODE Solutions")
+
+Full_sol_data <- read.csv("full_ts_data.csv")
+
+```
+
+
+```{r}
+#Format Dates and cerat density variable
+TCTempDataFull$Date <- as.Date(TCTempDataFull$Date, format = "%m/%d/%Y")
+
+TCTempDataFull <- TCTempDataFull %>% mutate(SppPerML = Count/Volume..mL.)
+```
+
+```{r}
+#add days since start instead of dates
+#Whoo! Thanks for the help AJ!
+
+jars <- unique(TCTempDataFull$Jar.ID)#get a list of all the unique plates
+
+TCTempDataFull$days.since.start <- NA#just making an empty column
+
+min.date <- vector()#empty vector for all the minimum plate dates
+
+for(i in jars){#iteratively figure out the min date for each plate
+  dates <- TCTempDataFull$Date[TCTempDataFull$Jar.ID==i]
+  min.date[i] <- min(dates)
+}
+
+TCTempDataFull$days.since.start <- TCTempDataFull$Date-min.date[TCTempDataFull$Jar.ID]#subtract!
+TCTempDataFull$days.since.start <- as.numeric(TCTempDataFull$days.since.start)#fix
+```
+
+```{r}
+#pull phylopic silloets
+
+uuid_hydra <- get_uuid(name = "Hydra", n = 1)
+img_hydra <- get_phylopic(uuid = uuid_hydra)
+
+uuid_daph <- get_uuid(name = "Daphnia pulex", n = 1)
+img_daph <- get_phylopic(uuid = uuid_daph)
+
+uuid_alg <- get_uuid(name = "Sphaeropleales", n = 1)
+img_alg <- get_phylopic(uuid = uuid_alg)
+```
+
+
+```{r}
+#Base Plots for DA Plots
+
+#Daph
+
+DA_Daph <- ggplot(data = filter(TCTempDataFull, Species == 'Daph', Community.ID != "H-P-A"), aes(x = days.since.start, y = SppPerML, color = as.factor(Temp))) + 
+  geom_point(size = 2.5, alpha= 0.3) + 
+  geom_line(data = filter(Full_sol_data, Species == "Daph", TL == 2), aes(x= days.since.start, y = SppPerML, colour = as.factor(Temp)), alpha = .9, linewidth = 2, inherit.aes =FALSE) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  scale_shape_manual("Temp (°C)", values = c(15, 16, 17, 18, 8)) +
+  xlim(0, 35) +
+  ylim(0,2) +
+  ylab(NULL) +
+  xlab(NULL) +
+  theme_cowplot(font_size = 30) +
+  draw_label("D", x = 31, y = 2, hjust = 0, vjust = 1, fontface = "bold", size = 32) +
+  add_phylopic(x = 3, y = 1.75, height = 0.95, img = img_daph, alpha = 1)
+```
+
+
+```{r}
+
+#Algae
+
+DA_alg <- ggplot(data = filter(TCTempDataFull, Species == 'Ank', Community.ID != "H-P-A"), aes(x = days.since.start, y = SppPerML, color = as.factor(Temp))) + 
+  geom_point(size = 2.5, alpha =0.3) +
+  geom_line(data = filter(Full_sol_data, Species == "Ank", TL == 2), aes(x= days.since.start, y = SppPerML, colour = as.factor(Temp)), alpha = .9, linewidth = 2, inherit.aes =FALSE) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  scale_shape_manual("Temp (°C)", values = c(15, 16, 17, 18, 8)) +
+  xlim(0, 35) +
+  ylim(0, 1.75e6) +
+  ylab(NULL) +
+  xlab("Time (Days)") +
+  theme_cowplot(font_size = 30) +
+  draw_label("E", x = 31, y = 1800000, hjust = 0, vjust = 1, fontface = "bold", size = 32) +
+  add_phylopic(x = 3, y = 1550000, height = 850000, img = img_alg, alpha = 1)
+```
+
+
+```{r}
+# Base plots for HDA
+
+#base plot for Hydra
+
+HDA_Hydra <- ggplot(data = filter(TCTempDataFull, Species == 'Hydra', Community.ID != "P-A"), aes(x = days.since.start, y = SppPerML, color = as.factor(Temp))) + 
+  geom_point(size = 2.5, alpha =0.3) +
+  geom_line(data = filter(Full_sol_data, Species == "Hydra", TL == 3), aes(x= days.since.start, y = SppPerML, colour = as.factor(Temp)), alpha = .9, linewidth = 2, inherit.aes =FALSE) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  scale_shape_manual("Temp (°C)", values = c(15, 16, 17, 18, 8)) +
+  xlim(0, 35) +
+  ylim(0, 0.1) +
+  xlab(NULL) +
+  ylab(NULL) +
+  theme_cowplot(font_size = 30) +
+  draw_label("A", x = 31, y = 0.105, hjust = 0, vjust = 1, fontface = "bold", size = 32) +
+  add_phylopic(x = 3, y = 0.09, height = 0.055, img = img_hydra, alpha = 1)
+```
+
+```{r}
+# base plot for Daph
+
+HDA_Daph <- ggplot(data = filter(TCTempDataFull, Species == 'Daph', Community.ID != "P-A"), aes(x = days.since.start, y = SppPerML, color = as.factor(Temp))) + 
+  geom_point(size = 2.5, alpha =0.3) +
+  geom_line(data = filter(Full_sol_data, Species == "Daph", TL == 3), aes(x= days.since.start, y = SppPerML, colour = as.factor(Temp)), alpha = .9, linewidth = 2, inherit.aes =FALSE) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  scale_shape_manual("Temp (°C)", values = c(15, 16, 17, 18, 8)) +
+  xlim(0, 35) +
+  ylim(0,2) +
+  xlab(NULL) +
+  ylab("Density (individuals/mL)") +
+  theme_cowplot(font_size = 30) +
+  draw_label("B", x = 31, y = 2, hjust = 0, vjust = 1, fontface = "bold", size = 32) +
+  add_phylopic(x = 3, y = 1.75, height = 0.95, img = img_daph, alpha = 1)
+
+```
+
+
+```{r}
+# base plot for Algae
+
+HDA_alg <-  ggplot(data = filter(TCTempDataFull, Species == 'Ank', Community.ID != "P-A"), aes(x = days.since.start, y = SppPerML,color = as.factor(Temp))) + 
+  geom_point(size = 2.5, alpha =0.3) +
+  geom_line(data = filter(Full_sol_data, Species == "Ank", TL == 3), aes(x= days.since.start, y = SppPerML, colour = as.factor(Temp)), alpha = .9, linewidth = 2, inherit.aes =FALSE) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  scale_shape_manual("Temp (°C)", values = c(15, 16, 17, 18, 8)) +
+  xlim(0, 35) +
+  ylim(0, 1.75e6) +
+  ylab(NULL) +
+  xlab("Time (Days)") +
+  theme_cowplot(font_size = 30) +
+  draw_label("C", x = 31, y = 1800000, hjust = 0, vjust = 1, fontface = "bold", size = 32) +
+  add_phylopic(x = 3, y = 1550000, height = 850000, img = img_alg, alpha = 1)
+
+
+```
+
+```{r}
+
+dynamics_point <- ggarrange(HDA_Hydra, NA, HDA_Daph, DA_Daph, HDA_alg, DA_alg, ncol = 2, nrow = 3, common.legend = TRUE, legend = "right", align = "v")
+
+#ggsave("Dynamics_point_plot_paper.png", dynamics_point, width = 12, height = 7, dpi = 600)
+
+```
+
+```{r}
+#Base Plots for DA Plots no points
+
+#Daph
+
+DA_Daph_NP <- ggplot(data = filter(TCTempDataFull, Species == 'Daph', Community.ID != "H-P-A"), aes(x = days.since.start, y = SppPerML, color = as.factor(Temp))) +
+  geom_line(data = filter(Full_sol_data, Species == "Daph", TL == 2), aes(x= days.since.start, y = SppPerML, colour = as.factor(Temp)), alpha = .9, linewidth = 1.5, inherit.aes =FALSE) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  xlim(0, 35) +
+  ylim(0,1.5) +
+  ylab(NULL) +
+  xlab(NULL) +
+  theme_cowplot(font_size = 24)
+  
+
+#Algae
+
+DA_alg_NP <- ggplot(data = filter(TCTempDataFull, Species == 'Ank', Community.ID != "H-P-A"), aes(x = days.since.start, y = SppPerML, color = as.factor(Temp))) + 
+  geom_line(data = filter(Full_sol_data, Species == "Alg", TL == 2), aes(x= days.since.start, y = SppPerML, colour = as.factor(Temp)), alpha = .9, linewidth = 1.5, inherit.aes =FALSE) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  xlim(0, 35) +
+  ylim(0, 1.2e6) +
+  ylab(NULL) +
+  xlab("Time (Days)") +
+  theme_cowplot(font_size = 24)
+```
+
+```{r}
+# Base plots for HDA no points
+
+#base plot for Hydra
+
+HDA_Hydra_NP <- ggplot(data = filter(TCTempDataFull, Species == 'Hydra', Community.ID != "P-A"), aes(x = days.since.start, y = SppPerML, color = as.factor(Temp))) +
+  geom_line(data = filter(Full_sol_data, Species == "Hydra", TL == 3), aes(x= days.since.start, y = SppPerML, colour = as.factor(Temp)), alpha = .9, linewidth = 1.5, inherit.aes =FALSE) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  xlim(0, 35) +
+  ylim(0, 0.05) +
+  xlab(NULL) +
+  ylab(NULL) +
+  theme_cowplot(font_size = 30)
+
+# base plot for Daph
+
+HDA_Daph_NP <- ggplot(data = filter(TCTempDataFull, Species == 'Daph', Community.ID != "P-A"), aes(x = days.since.start, y = SppPerML, color = as.factor(Temp))) + 
+  geom_line(data = filter(Full_sol_data, Species == "Daph", TL == 3), aes(x= days.since.start, y = SppPerML, colour = as.factor(Temp)), alpha = .9, linewidth = 1.5, inherit.aes =FALSE) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  xlim(0, 35) +
+  ylim(0,1.5) +
+  xlab(NULL) +
+  ylab("Density (individuals/mL)") +
+  theme_cowplot(font_size = 30)
+  
+
+# base plot for Algae
+
+HDA_alg_NP <-  ggplot(data = filter(TCTempDataFull, Species == 'Ank', Community.ID != "P-A"), aes(x = days.since.start, y = SppPerML, color = as.factor(Temp))) + 
+  geom_line(data = filter(Full_sol_data, Species == "Alg", TL == 3), aes(x= days.since.start, y = SppPerML, colour = as.factor(Temp)), alpha = .9, linewidth = 1.5, inherit.aes =FALSE) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  xlim(0, 35) +
+  ylim(0, 1.2e6) +
+  ylab(NULL) +
+  xlab("Time (Days)") +
+  theme_cowplot(font_size = 30)
+
+```
+
+
+```{r}
+HDA_Hydra_row <- ggplot(data = filter(TCTempDataFull, Species == 'Hydra', Community.ID != "P-A"), aes(x = days.since.start, y = SppPerML, color = as.factor(Temp))) + 
+  geom_point(size = 3, alpha =0.5) +
+  geom_line(data = filter(Full_sol_data, Species == "Hydra", TL == 3), aes(x= days.since.start, y = SppPerML, colour = as.factor(Temp)), alpha = .9, linewidth = 1.5, inherit.aes =FALSE) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  facet_wrap(~factor(Temp, levels = c(14, 17, 20, 23, 26)), ncol = 5) +
+  xlim(0, 35) +
+  ylim(0, 0.1) +
+  ylab(NULL)+
+  xlab("Time (Days)") +
+  theme_cowplot(font_size = 24) +
+  theme(strip.background = element_blank(), strip.text.x = element_blank())
+```
+
+```{r}
+HDA_daph_row <- ggplot(data = filter(TCTempDataFull, Species == 'Daph', Community.ID != "P-A"), aes(x = days.since.start, y = SppPerML, color = as.factor(Temp))) + 
+  geom_point(size = 3, alpha =0.5) +
+  geom_line(data = filter(Full_sol_data, Species == "Daph", TL == 3), aes(x= days.since.start, y = SppPerML, colour = as.factor(Temp)), alpha = .9, linewidth = 1.5, inherit.aes =FALSE) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  facet_wrap(~factor(Temp, levels = c(14, 17, 20, 23, 26)), ncol = 5) +
+  xlim(0, 35) +
+  ylim(0,2) +
+  ylab("Density (Individuals/Cells per mL)") +
+  xlab("Time (Days)") +
+  theme_cowplot(font_size = 24) +
+  theme(strip.background = element_blank(), strip.text.x = element_blank())
+```
+
+```{r}
+HDA_alg_row <- ggplot(data = filter(TCTempDataFull, Species == 'Ank', Community.ID != "P-A"), aes(x = days.since.start, y = SppPerML, color = as.factor(Temp))) + 
+  geom_point(size = 3, alpha =0.5) +
+  geom_line(data = filter(Full_sol_data, Species == "Alg", TL == 3), aes(x= days.since.start, y = SppPerML, colour = as.factor(Temp)), alpha = .9, linewidth = 1.5, inherit.aes =FALSE) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  facet_wrap(~factor(Temp, levels = c(14, 17, 20, 23, 26)), ncol = 5) +
+  xlim(0, 35) +
+  ylim(0, 1.2e6) +
+  ylab(NULL) +
+  xlab("Time (Days)") +
+  theme_cowplot(font_size = 24) +
+  theme(strip.background = element_blank(), strip.text.x = element_blank())
+```
+
+```{r}
+ ggarrange(HDA_Hydra_row, HDA_daph_row, HDA_alg_row, ncol = 1, nrow = 3, common.legend = TRUE, legend = "bottom", align = "hv")
+```
+
+
+```{r}
+ggsave("Dynamics_point_plot_paper.png", dynamics_point, width = 16, height = 10, dpi = 600)
+
+#ggsave("Dynamics_point_plot_present.png", dynamics_point, width = 36, height = 21, dpi = 500)
+
+#w = 24, h = 14 for bigger plot
+```
+
+

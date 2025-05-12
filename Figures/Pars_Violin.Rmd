@@ -1,0 +1,143 @@
+---
+title: "Pars_Violin"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(cowplot)
+library(deSolve)
+library(rstan)
+library(coda)
+library(modelbased)
+library(shinystan)
+library(colorspace)
+library(bayesplot)
+library(ggpubr)
+library(rphylopic)
+library(ggpattern)
+```
+
+```{r}
+DA_all_draws_long <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting Output/Draws/DA_all_draws_long.csv")
+
+HDA_all_draws_long <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting Output/Draws/HDA_all_draws_long.csv")
+```
+
+```{r}
+draws <- rbind(DA_all_draws_long, HDA_all_draws_long)
+```
+
+```{r}
+ordered_params <- c("a2","h2","w2","e2","d2", 
+                    "a1","h1","w1","e1","d1",
+                    "r","Q","B")
+
+label_map <- c(
+  a2 = "a[p]", h2 = "h[p]", w2 = "w[p]", e2 = "e[p]", d2 = "d[p]",
+  a1 = "a[c]", h1 = "h[c]", w1 = "w[c]", e1 = "e[c]", d1 = "d[c]",
+  r = "r", Q = "Q", B = "B"
+)
+
+```
+
+```{r}
+draws <- draws %>%
+  mutate(Parameter_label = factor(label_map[Parameter],
+                                  levels = label_map[ordered_params]))
+```
+```{r}
+#pull phylopic
+
+uuid_hydra <- get_uuid(name = "Hydra", n = 1)
+img_hydra <- get_phylopic(uuid = uuid_hydra)
+
+uuid_daph <- get_uuid(name = "Daphnia pulex", n = 1)
+img_daph <- get_phylopic(uuid = uuid_daph)
+
+uuid_alg <- get_uuid(name = "Sphaeropleales", n = 1)
+img_alg <- get_phylopic(uuid = uuid_alg)
+```
+
+```{r}
+ facet_violin <- ggplot(data = draws %>% filter(Parameter %in% ordered_params),
+       aes(x = as.factor(Temp), y = Estimate, fill = as.factor(TL), color = as.factor(Temp))) +
+  geom_violin(draw_quantiles = c(0.025, 0.5, 0.975), scale = "width", lwd = 1) +
+  facet_wrap(~Parameter_label, scales = "free", ncol = 5, labeller = label_parsed) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  scale_fill_manual("Trophic Levels", values = c("#666666", "#e0e0e0")) +
+  xlab("Temperature (°C)") +
+  labs(color = "Trophic Levels") +
+  theme_cowplot(font_size = 24) +
+  theme(legend.position = "bottom")
+
+```
+
+
+```{r}
+hydra_violin <- ggplot(data = filter(draws, Parameter %in% c("a2","h2","w2")),  aes(x=as.factor(Temp), y= Estimate, color = as.factor(Temp))) +
+  geom_violin(draw_quantiles = c(0.025, 0.5, 0.975), scale = "width", lwd = 3) +
+  facet_wrap(~factor(Parameter, levels = c("a2","h2","w2")),  scales = "free", ncol = 3) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  xlab("Temperature (°C)") +
+  labs(color= "Trophic Levels") +
+  theme_cowplot(font_size = 50) +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+daph_violin <- ggplot(data = filter(draws, Parameter %in% c("a1","w1")), aes(x=as.factor(Temp), y= Estimate, fill = as.factor(TL), color = as.factor(Temp))) +
+  geom_violin(draw_quantiles = c(0.025, 0.5, 0.975), scale = "width", lwd = 3) +
+  facet_wrap(~factor(Parameter, levels = c("a1","w1")),  scales = "free", ncol = 2) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  scale_fill_manual("Trophic Levels", values = c("#666666", "#e0e0e0")) +
+  xlab("Temperature (°C)") +
+  labs(color= "Trophic Levels") +
+  theme_cowplot(font_size = 50) +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+alg_violin <- ggplot(data = filter(draws, Parameter %in% c("r", "Q")), aes(x=as.factor(Temp), y= Estimate, fill = as.factor(TL), color = as.factor(Temp))) +
+  geom_violin(draw_quantiles = c(0.025, 0.5, 0.975), scale = "width", lwd = 3) +
+  facet_wrap(~factor(Parameter, levels = c("r", "Q")),  scales = "free", ncol = 3) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  scale_fill_manual("Trophic Levels", values = c("#666666", "#e0e0e0")) +
+  xlab("Temperature (°C)") +
+  labs(color= "Trophic Levels") +
+  theme_cowplot(font_size = 50) +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+ar_violin <- ggplot(data = filter(draws, Parameter %in% c("a2","a1","r")), aes(x=as.factor(Temp), y= Estimate, fill = as.factor(TL), color = as.factor(Temp))) +
+  geom_violin(draw_quantiles = c(0.025, 0.5, 0.975), scale = "width", lwd = 3) +
+  facet_wrap(~factor(Parameter, levels = c("a2","a1","r")),  scales = "free", ncol = 3) +
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100")) +
+  scale_fill_manual("Trophic Levels", values = c("#666666", "#e0e0e0")) +
+  xlab("Temperature (°C)") +
+  labs(color= "Trophic Levels") +
+  theme_cowplot(font_size = 50) +
+  theme(legend.position = "bottom")
+```
+
+
+
+
+```{r}
+ggsave("Pars_Violin_paper.png", facet_violin, width = 16, height = 10, dpi = 600)
+
+ggsave("Pars_Violin_present.png", facet_violin, width = 36, height = 21, dpi = 800)
+
+ggsave("Hydra_Violin_present.png", hydra_violin, width = 36, height = 14, dpi = 800)
+
+ggsave("daph_Violin_present.png", daph_violin, width = 36, height = 14, dpi = 800)
+
+ggsave("alg_Violin_present.png", alg_violin, width = 36, height = 14, dpi = 800)
+
+ggsave("ar_Violin_present.png", ar_violin, width = 36, height = 14, dpi = 500)
+
+#width = 20, height = 14 big figure
+```
+
