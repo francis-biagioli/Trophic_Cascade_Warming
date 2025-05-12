@@ -1,0 +1,329 @@
+---
+title: "HDA_17"
+output: html_document
+---
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(cowplot)
+library(deSolve)
+library(rstan)
+library(coda)
+library(modelbased)
+library(shinystan)
+library(msm)
+```
+
+READ IN RAW DATA
+
+```{r}
+#read in Data
+setwd("~/Trophic_Cascade_Warming_Submission")
+
+TCTempDataFull <- read.csv("TC_Temp_Data_Full.csv")
+
+```
+
+FORMAT DATES AND CALCULATE CELL DENSITIES
+
+```{r}
+#DATES
+TCTempDataFull$Date <- as.Date(TCTempDataFull$Date, format = "%m/%d/%Y")
+
+#CREATE DENSITY
+TCTempDataFull <- TCTempDataFull %>% mutate(SppPerML = Count/Volume..mL.)
+```
+
+CREATE DAYS SINCE START VARIABLE
+
+```{r}
+jars <- unique(TCTempDataFull$Jar.ID)#get a list of all the unique jars
+
+TCTempDataFull$days.since.start <- NA#just making an empty column
+
+min.date <- vector()#empty vector for all the minimum jar dates
+
+for(i in jars){#iteratively figure out the min date for each jar
+  dates <- TCTempDataFull$Date[TCTempDataFull$Jar.ID==i]
+  min.date[i] <- min(dates)
+}
+
+TCTempDataFull$days.since.start <- TCTempDataFull$Date-min.date[TCTempDataFull$Jar.ID]#subtract!
+TCTempDataFull$days.since.start <- as.numeric(TCTempDataFull$days.since.start)#fix
+```
+
+FILTER TO TARGET TEMP AND REMOVE HYDRA JARS FROM DATA
+
+```{r}
+#remove hydra dishes
+TCTempDataJar_Temp_i <- TCTempDataFull %>% 
+  filter(Temp == 17, Community.ID != "P-A")
+```
+
+FORMAT DATA INTO MATRIX FOR ODE SOLVER
+
+```{r}
+jars <- unique(TCTempDataJar_Temp_i$Jar.ID) #unique identifier for wach dish
+
+
+Algae_mat <- matrix(nrow = 5, ncol = 16) #create empty matrix for algae data 
+
+for(i in 1:5) {
+  Algae_mat[i,] <- TCTempDataJar_Temp_i %>% filter(Jar.ID == jars[i] & Species == 'Ank') %>% pull(SppPerML)  
+} #populate empty algae matrix
+
+Daph_mat <- matrix(nrow = 5, ncol = 16) #create empty matrix for daphnia data
+
+for(i in 1:5) {
+  Daph_mat[i,] <- TCTempDataJar_Temp_i %>% filter(Jar.ID == jars[i] & Species == 'Daph') %>% pull(SppPerML)  
+} # populate empty daphnia matrix
+
+Hydra_mat <- matrix(nrow = 5, ncol = 16) #create empty matrix for daphnia data
+
+for(i in 1:5) {
+  Hydra_mat[i,] <- TCTempDataJar_Temp_i %>% filter(Jar.ID == jars[i] & Species == 'Hydra') %>% pull(SppPerML)  
+} # populate empty daphnia matrix
+
+
+```
+
+SET STAN FITTING OPTIONS
+```{r}
+### set stan options
+
+options(mc.cores = parallel::detectCores()) #identify cores in machine
+rstan_options(auto_write = TRUE)
+chains = 3 #declare number of MCMC chains
+iter = 5000 #declare total number of fitting iterations
+warmup = 3000 #declare number of iterations for burnin/warmup
+```
+
+DEFINE ODE MODEL
+
+```{r}
+# parameters: p[1] = r, p[2] = K, p[3] = a, p[4] = e, p[5] = d, p[6] = h, p[7] = w, p[8] = B
+# N[1] is the Algae, N[2] is the Daphnia, N[3] is Hydra
+
+odemodel <- function(t, N, p) {
+  dN1dt = (p[1]*N[1]*(1-N[1]*p[2]*exp(p[8]*t)))-(p[3]*N[1]*N[2]/(1+p[7]*(N[2]-0.003333333)+p[3]*p[6]*N[1]))
+  
+  dN2dt = ((p[4]*p[3]*N[1]*N[2])/((1+p[7]*(N[2]-0.003333333))+(p[3]*p[6]*N[1])))-((p[9]*N[2]*N[3])/((1+p[13]*(N[3]-0.003333333))+(p[9]*p[12]*N[2])))-(p[5]*N[2])
+  
+  dN3dt = ((p[10]*p[9]*N[2]*N[3])/((1+p[13]*(N[3]-0.003333333))+(p[9]*p[12]*N[2])))-(p[11]*N[3])
+  
+  return(list(c(dN1dt, dN2dt, dN3dt)))
+}
+```
+
+DEFINE STAN DATA
+
+```{r}
+stan_data <- list(n = length(unique(TCTempDataJar_Temp_i$days.since.start)), # n is our number of observations
+                  m=length(jars),
+                  t = unique(TCTempDataJar_Temp_i$days.since.start),
+                  
+                  N1 = Algae_mat, # Matrix of algal densities across treamtemt
+                  N2 = Daph_mat, #matrix of daph densities
+                  N3 = Hydra_mat #matrix of hydra densities
+                  )
+
+```
+
+IDENTIFY STAN MODEL FILE
+
+```{r}
+stanmodel <- stan_model('HDA_17.stan')
+```
+
+DECLARE INITIAL VALUES FOR FITTING
+
+```{r}
+
+inits <- function() {
+  list(
+       r = 6.787555e-02 ,
+       Q = 1.228757e-07,
+       a1 = 7.264282e+00,
+       h1 = 1.909385e-05,
+       w1 = 1.923267e+00,
+       a2 = 1.700129e+01, 
+       e2 = 7.164866e-02, 
+       d2 = 4.642658e-02, 
+       h2 = 2.360541e-01, 
+       w2 =  2.214582e+01, 
+       sd_obs1 = 2e5, 
+       sd_obs2 = 0.2,
+       sd_obs3 =  0.008,
+       N1_0 = c(2e5, 2e5, 2e5, 2e5, 2e5),
+       N2_0 = c(0.06666667, 0.06666667, 0.06666667, 0.06666667, 0.06666667),
+       N3_0 =c(5e-3, 5e-3, 5e-3, 5e-3, 5e-3))
+} 
+
+```
+
+RUN STAN FIT
+
+```{r}
+HDA_17_Pred_Uni_fit_a1w1h1_rQ = sampling(stanmodel,
+               data = stan_data,
+               iter = iter,
+               warmup = warmup,
+               chains = chains,
+               init = inits,
+               control = list(adapt_delta =.8, max_treedepth=12.5, stepsize=1), refresh = 10) 
+#list(adapt_delta =.9, max_treedepth=12, stepsize=0.8)
+```
+
+```{r}
+summary(HDA_17_Pred_Uni_fit_a1w1h1_rQ) #FIT SUMMARY
+```
+
+DIAGNOSTIC PLOTS FOR STAN FIT
+
+```{r}
+rstan::traceplot(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = "r", inc_warmup = TRUE)
+
+rstan::traceplot(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = "Q", inc_warmup = TRUE)
+
+rstan::traceplot(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = "a1", inc_warmup = TRUE)
+
+rstan::traceplot(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = "h1", inc_warmup = TRUE)
+
+rstan::traceplot(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = "w1", inc_warmup = TRUE)
+```
+
+
+```{r}
+
+rstan::traceplot(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = "a2", inc_warmup = TRUE)
+
+rstan::traceplot(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = "e2", inc_warmup = TRUE)
+
+rstan::traceplot(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = "d2", inc_warmup = TRUE)
+
+rstan::traceplot(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = "h2", inc_warmup = TRUE)
+
+rstan::traceplot(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = "w2", inc_warmup = TRUE)
+
+rstan::traceplot(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = 'sd_obs1', inc_warmup = TRUE)
+
+rstan::traceplot(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = 'sd_obs2', inc_warmup = TRUE)
+
+rstan::traceplot(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = 'sd_obs3', inc_warmup = TRUE)
+```
+
+```{r}
+r_prior <- data.frame(x = seq(0,2, by = 0.001), vals =
+  dtnorm(x= seq(0,2, by = 0.001), mean =9.091239e-02, sd = 7.869849e-03, lower = 0))
+
+Q_prior <- data.frame(x = seq(0,1e-3, by = 1e-9), vals =
+  dtnorm(x= seq(0,1e-3, by = 1e-9), mean =7.921066e-08, sd = 4.197810e-08, lower = 0))
+
+a1_prior <- data.frame(x = seq(0,30, by = 0.001), vals =
+  dtnorm(x= seq(0,30, by = 0.001), mean =5, sd = 3, lower = 0))
+
+h1_prior <- data.frame(x = seq(0,1e-5, by = 1e-9), vals =
+  dtnorm(x= seq(0,1e-5, by = 1e-9), mean =4.376354e-06, sd =2.214301e-06, lower = 0))
+
+w1_prior <- data.frame(x = seq(0,5, by = 0.001), vals =
+  dtnorm(x= seq(0,5, by = 0.001), mean =1.956673e+00, sd =2.877751e-01, lower = 0))
+
+```
+
+```{r}
+
+a2_prior <- data.frame(x = seq(0,50, by = 0.01), vals =
+  dtnorm(x= seq(0,50, by = 0.01), mean =1.860873e+01, sd = 4.227891e+00, lower = 0))
+
+e2_prior <- data.frame(x = seq(0,1, by = 0.001), vals =
+  dtnorm(x= seq(0,1, by = 0.001), mean = 1.151926e-01, sd = 1.612833e-02 , lower = 0, upper = 1))
+
+d2_prior <- data.frame(x = seq(0,1, by = 0.0001), vals =
+  dtnorm(x= seq(0,1, by = 0.0001), mean = 3.318828e-02, sd = 7.723955e-03, lower = 0))
+
+h2_prior <- data.frame(x = seq(0,1, by = 0.001), vals =
+  dtnorm(x= seq(0,1, by = 0.001), mean = 2.231816e-01, sd =5.352247e-02, lower = 0))
+
+w2_prior <- data.frame(x = seq(0,50, by = 0.01), vals =
+  dtnorm(x= seq(0,50, by = 0.01), mean = 3.103368e+01, sd = 8.051515e+00, lower = 0))
+
+
+```
+
+```{r}
+stan_dens(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = c("r"), separate_chains = TRUE) +
+    geom_line(data = r_prior, aes(x=x, y = vals), linewidth = 0.75)
+
+stan_dens(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = c("Q"), separate_chains = TRUE) +
+    geom_line(data = Q_prior, aes(x=x, y = vals), linewidth = 0.75)
+
+stan_dens(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = c("a1"), separate_chains = TRUE) +
+    geom_line(data = a1_prior, aes(x=x, y = vals), linewidth = 0.75)
+
+stan_dens(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = c("h1"), separate_chains = TRUE) +
+    geom_line(data = h1_prior, aes(x=x, y = vals), linewidth = 0.75)
+
+stan_dens(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = c("w1"), separate_chains = TRUE) +
+    geom_line(data = w1_prior, aes(x=x, y = vals), linewidth = 0.75)
+
+```
+
+```{r}
+
+stan_dens(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = c("a2"), separate_chains = TRUE) +
+    geom_line(data = a2_prior, aes(x=x, y = vals), linewidth = 0.75)
+
+stan_dens(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = c("e2"), separate_chains = TRUE) +
+    geom_line(data = e2_prior, aes(x=x, y = vals), linewidth = 0.75)
+
+stan_dens(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = c("d2"), separate_chains = TRUE) +
+    geom_line(data = d2_prior, aes(x=x, y = vals), linewidth = 0.75)
+
+stan_dens(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = c("h2"), separate_chains = TRUE) +
+    geom_line(data = h2_prior, aes(x=x, y = vals), linewidth = 0.75)
+
+stan_dens(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = c("w2"), separate_chains = TRUE) +
+    geom_line(data = w2_prior, aes(x=x, y = vals), linewidth = 0.75)
+```
+
+```{r}
+
+pairs(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = c("r", "Q", "a1", "h1", "w1", "a2", "e2", "d2", "h2", "w2"), log = FALSE)
+
+```
+
+SAVE STAN FIT AND DRAWS
+
+```{r}
+save(HDA_17_Pred_Uni_fit_a1w1h1_rQ, file = "HDA_17_Pred_Uni_fit_a1w1h1_rQ") # SAVE FIT
+```
+
+SAVE DRAWS PER ITERATION
+
+```{r}
+
+HDA_17_draws_iter <- extract(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = c('r', 'Q', 'a1', 'h1', 'w1', 'a2', 'e2', 'd2', 'h2', 'w2', 'N1_0', 'N2_0', 'N3_0'), inc_warmup = FALSE, permuted = TRUE)
+
+HDA_17_draws_iter <- as.data.frame(HDA_17_draws_iter)
+
+HDA_17_draws_iter <- tibble::rownames_to_column(HDA_17_draws_iter, "Iteration")
+
+write_csv(HDA_17_draws_iter, file = "HDA_17_draws_iter.csv")
+```
+
+SAVE PARAMETER SUMMARY 
+
+```{r}
+
+HDA_17_pars_sum <- extract(HDA_17_Pred_Uni_fit_a1w1h1_rQ, pars = c('r', 'Q', 'a1', 'h1', 'w1', 'a2', 'e2', 'd2', 'h2', 'w2', 'N1_0', 'N2_0', 'N3_0'), inc_warmup = FALSE, permuted = FALSE)
+
+HDA_17_pars_sum <- monitor(HDA_17_pars_sum, warmup = 0, print = FALSE, digits_summary = 7)
+
+HDA_17_pars_sum <- as.data.frame(HDA_17_pars_sum)
+
+HDA_17_pars_sum <- tibble::rownames_to_column(HDA_17_pars_sum, "Parameter")
+
+write_csv(HDA_17_pars_sum, file = "HDA_17_pars_sum.csv")
+
+```
+
