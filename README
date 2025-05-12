@@ -1,0 +1,89 @@
+Warming increases the strength of trophic cascades
+
+F.P. Biagioli, K.E. Coblentz, L. Yang, D. Thilakarathne, J.P. DeLong
+
+University of Nebraska-Lincoln
+
+README FILE
+
+This project includes code used to fit ODE models using Stan, process and analyze posterior outputs, calculate trophic cascade strength, and generate figures for analysis and publication.
+
+Note: You may need to adjust file paths to ensure data loads properly when running each .Rmd file.
+
+STEP 1: IMPORT RAW TIME SERIES DATA
+-Place the CSV file containing time series data into the main project folder.
+-The data should include the following columns:
+  -Jar ID: Unique identifier for each replicate
+  -Community ID: Describes community structure (P-A for 2-species treatment; H-P-A for 3-species treatment)
+  -Block: Replicate block
+  -Date: Date of data collection
+  -Species: Species name
+  -Count: Observed species count
+  -Volume: Volume counted
+
+STEP 2: RUN STAN FITS
+-Navigate to the Fitting/ folder, which contains .Rmd and .stan files used to run Stan models.
+-File/folder naming conventions:
+  -Files starting with DA refer to 2-species communities (no Hydra top predator).
+  -Files starting with HDA refer to 3-species communities (with Hydra top predator).
+  -The number following DA or HDA indicates the temperature treatment.
+  
+-Each folder contains:
+  -An .Rmd file that reads and manipulates the raw data, runs Stan models, and saves outputs.
+  -A .stan file with the Stan model code.
+
+-Running the .Rmd files will:
+  -Save the Stan fit object.
+  -Save a .csv file of posterior draws (one row per MCMC iteration).
+  -Save a .csv of posterior summary statistics for each parameter.
+
+STEP 3: ORGANIZE STAN OUTPUT
+-Navigate to Fitting Output/Draws/ to process output files.
+-Files here combine posterior draws and summary statistics across temperature and community treatments.
+
+-Combine_Posterior_Data.Rmd: Saves two .csv files:
+  -One with posterior estimates from all 2-species treatments.
+  -One with posterior estimates from all 3-species treatments.
+
+-Posterior_Summary.Rmd: Saves a single .csv file containing summary statistics (e.g., median, CI) for all estimated parameters across all treatments.
+
+STEP 4: CALCULATE ODE SOLUTIONS FROM POSTERIOR SUMMARIES
+-Navigate to Fitting Output/ODE Output/.
+
+-Run ODE_Solutions.Rmd to:
+  -Calculate ODE solutions using median values from the posterior distributions.
+  -Save a .csv file with ODE solutions for both 2- and 3-species models across temperature treatments.
+
+STEP 5: CALCULATE TROPHIC CASCADE STRENGTHS
+-Navigate to the TC_Strength/ folder.
+
+-This folder contains:
+  1)TC_Strength_From_Sol.Rmd
+    -Uses ODE solutions to calculate trophic cascade strength over time for each temperature.
+    -Saves five .csv files, one for each temperature.
+
+  2)TC_Strength_Posterior_Data.Rmd
+    -Computes the average trophic cascade strength across the full time series for each temperature treatment.
+    -Saves a .csv file with 6000 posterior estimates per temperature treatment.
+    
+STEP 6: RUN LINEAR REGRESSION ANALYSIS ON POSTERIOR DISTRIBUTIONS OF MEAN TROPHIC CASCADES
+- Navigate to the TC Strength/Posterior Analysis/ folder.
+
+- Run "TC_Change_With_Temp.Rmd" file to:
+    - Run the linear regression analysis described in the Methods section of the main text and expanded on in the Supplimentary Materials S4
+    - Save a plot vidualizing the posterior distribution of slopes output from the analysis.
+
+STEP 6: CREATE PLOTS
+-Navigate to the Figures/ folder to generate all project figures.
+
+-Available files:
+  1)Full_Dynamics_Sol_Plots.Rmd: Saves plots of time series dynamics for each treatment.
+  2)Pars_Violin.Rmd: Saves violin plots showing posterior distributions of all estimated parameters.
+  3)TC_Strength_Plots.Rmd: Saves plots of trophic cascade strength over time and average cascade strength for each treatment.
+
+STEP 7: GENERATE SUPPLIMENTAL FIGURES AND TABLES
+-Navigate to the Supplemental Figures/ folder.
+
+-Includes files to:
+  1)Create trace plots for each estimated parameter.
+  2)Generate summary statistic tables from Stan fits.
