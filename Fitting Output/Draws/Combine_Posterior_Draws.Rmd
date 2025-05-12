@@ -1,0 +1,115 @@
+---
+title: "Combine_Posterior_Draws"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(cowplot)
+library(rstan)
+library(deSolve)
+library(coda)
+library(modelbased)
+library(shinystan)
+library(colorspace)
+library(bayesplot)
+```
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// LOAD IN POSTERIOR DRAWS ////////////////////////////////////////////////////////// //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+```{r}
+##############################################################################################################################################
+########################################################### TWO SPECIES DRAWS ################################################################
+##############################################################################################################################################
+
+DA_14_draws <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/DA_14/DA_14_draws_iter.csv")
+DA_14_draws$Temp <- 14 # ADD TEMP TREATMENT 
+
+DA_17_draws <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/DA_17/DA_17_draws_iter.csv")
+DA_17_draws$Temp <- 17 # ADD TEMP TREATMENT 
+
+DA_20_draws <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/DA_20/DA_20_draws_iter.csv")
+DA_20_draws$Temp <- 20 # ADD TEMP TREATMENT 
+DA_20_draws$N1_0.5 <- NA
+DA_20_draws$N2_0.5 <- NA
+
+DA_23_draws <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/DA_23/DA_23_draws_iter.csv")
+DA_23_draws$Temp <- 23 # ADD TEMP TREATMENT 
+
+DA_26_draws <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/DA_26/DA_26_draws_iter.csv")
+DA_26_draws$Temp <- 26 # ADD TEMP TREATMENT 
+
+```
+
+```{r}
+#############################################################################################################################################
+########################################################### THREE SPECIES DRAWS ############################################################# #############################################################################################################################################
+
+HDA_14_draws <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_14/HDA_14_draws_iter.csv")
+HDA_14_draws$Temp <- 14 # ADD TEMP TREATMENT 
+
+HDA_17_draws <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_17/HDA_17_draws_iter.csv")
+HDA_17_draws$Temp <- 17 # ADD TEMP TREATMENT 
+
+HDA_20_draws <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_20/HDA_20_draws_iter.csv")
+HDA_20_draws$Temp <- 20 # ADD TEMP TREATMENT 
+
+HDA_23_draws <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_23/HDA_23_draws_iter.csv")
+HDA_23_draws$Temp <- 23 # ADD TEMP TREATMENT 
+
+HDA_26_draws <- read.csv("~/Trophic_Cascade_Warming_Submission/Fitting/HDA_26/HDA_26_draws_iter.csv")
+HDA_26_draws$Temp <- 26 # ADD TEMP TREATMENT 
+
+```
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// COMBINE POSTERIOR DRAWS ////////////////////////////////////////////////////////// //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+```{r}
+DA_all_draws <- rbind(DA_14_draws, DA_17_draws, DA_20_draws, DA_23_draws, DA_26_draws)
+
+HDA_all_draws <- rbind(HDA_14_draws, HDA_17_draws, HDA_20_draws, HDA_23_draws, HDA_26_draws)
+```
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// SAVE DRAWS DATA ///////////////////////////////////////////////////////////// //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+```{r}
+write.csv(DA_all_draws, file = "DA_all_draws.csv", row.names = FALSE)
+
+write.csv(HDA_all_draws, file = "HDA_all_draws.csv", row.names = FALSE)
+```
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// FORMAT FROM WIDE TO LONG //////////////////////////////////////////////////////////// //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+```{r}
+DA_all_draws_long <- DA_all_draws %>% pivot_longer(
+    cols = -c(Iteration, Temp),  
+    names_to = "Parameter",  # Name of the new column for parameter names
+    values_to = "Estimate"  # Name of the new column for parameter values
+  )
+
+DA_all_draws_long$TL <- 2
+```
+
+
+```{r}
+HDA_all_draws_long <- HDA_all_draws %>% pivot_longer(
+    cols = -c(Iteration, Temp),  
+    names_to = "Parameter",  # Name of the new column for parameter names
+    values_to = "Estimate"  # Name of the new column for parameter values
+  )
+
+HDA_all_draws_long$TL <- 3
+```
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// SAVE LONG DRAWS DATA /////////////////////////////////////////////////////////// //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+```{r}
+write.csv(DA_all_draws_long, file = "DA_all_draws_long.csv", row.names = FALSE)
+
+write.csv(HDA_all_draws_long, file = "HDA_all_draws_long.csv", row.names = FALSE)
+```
+
+
+
