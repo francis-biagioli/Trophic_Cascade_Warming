@@ -48,6 +48,8 @@ STEP 3: ORGANIZE STAN OUTPUT
 
 -Posterior_Summary.Rmd: Saves a single .csv file containing summary statistics (e.g., median, CI) for all estimated parameters across all treatments.
 
+- NOTE: Large Data files needed to be compressed before uploading data. Extract the data from the  .zip files before continuing to next step.
+
 STEP 4: CALCULATE ODE SOLUTIONS FROM POSTERIOR SUMMARIES
 -Navigate to Fitting Output/ODE Output/.
 
