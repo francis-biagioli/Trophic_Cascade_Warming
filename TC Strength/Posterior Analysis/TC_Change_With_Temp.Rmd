@@ -1,0 +1,77 @@
+---
+title: "TC_Change_With_Temp"
+output: html_document
+---
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(cowplot)
+library(deSolve)
+library(rstan)
+library(coda)
+library(modelbased)
+library(shinystan)
+library(colorspace)
+library(bayesplot)
+```
+
+READ IN TROPHIC CASCADE POSTERIORS
+
+```{r}
+TC_Strength <- read.csv("~/Trophic_Cascade_Warming_Submission/TC Strength/Avg_TC_full.csv")
+```
+
+CALCULATE POSTERIOR OF SLOPES OF TROPHIC CASCADE STRENGTH CHANGE WITH TEMP
+
+```{r}
+n_iter <- 6000
+TC_slope_results <- numeric(n_iter)
+
+set.seed(123)  # For reproducibility
+
+for (i in 1:n_iter) {
+   #For each temperature, randomly pick one iteration
+   TC_sampled_data <- TC_Strength %>%
+    group_by(Temp) %>%
+    slice(i) %>%
+    ungroup()
+  
+  # Fit a linear model: estimate ~ temperature
+  TC_lm_fit <- lm(Avg_TC ~ Temp, data = TC_sampled_data)
+  
+  # Save the slope (coefficient for temperature)
+  TC_slope_results[i] <- coef(TC_lm_fit)["Temp"]
+}
+```
+
+CALCULATE PERCENTAGE OF SLOPES GREATER THAN 0
+
+```{r}
+sum(TC_slope_results>0)/6000
+```
+
+PLOT POSTERIOR DISTRIBUTION OF SLOPES
+
+```{r}
+TC_slope_df <- tibble(
+  iteration = 1:n_iter,
+  slope = TC_slope_results
+)
+
+
+slope_posterior <- ggplot(TC_slope_df, aes(x = slope)) +
+  geom_histogram(aes(y = ..density..), 
+                 bins = 50, fill = "lightgray", color = "black", alpha = 0.6) +
+  geom_density(color = "blue", linewidth = 1) +
+  geom_vline(xintercept = 0, linetype = 2, linewidth = 1, alpha = 0.6) +
+  labs(x = "Slope of Trophic Cascade Strength Change", y = "Density") +
+  theme_cowplot(font_size = 24)
+
+```
+
+SAVE PLOT
+
+```{r}
+ggsave("slope_posterior.png", slope_posterior, width = 16, height = 12, dpi = 300)
+```
+
