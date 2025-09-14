@@ -16,7 +16,7 @@ library(bayesplot)
 ```
 
 ```{r}
-setwd("~/Trophic_Cascade_Warming_Submission/Fitting Output/Draws")
+setwd("/Users/francisbiagioli/Documents/R/Trophic_Cascade_Warming_Submission/Fitting Output/Draws")
 
 DA_draws <- read.csv("DA_all_draws.csv")
 
@@ -48,7 +48,7 @@ HDA_odemodel <- function(t, N, p) {
 }
 ```
 
-CALCUYLATE AVERAGE INITIAL AMOUNG REPLICATRES PER ITERATION
+CALCULATE AVERAGE INITIAL AMOUNG REPLICATRES PER ITERATION
 
 ```{r}
 DA_draws <- DA_draws %>%
@@ -337,6 +337,7 @@ sol_HDA_26[i,] <- as.data.frame(lsoda(y = c(HDA_26_draws_sample$N1_0_avg[i],
 }
 ```
 
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////// CALCULATE TC STRENGTH AT EACH TIME STEP //////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -496,7 +497,7 @@ write.csv(TC_Full_iter_time_quant, file = "TC_Full_iter_time_quant.csv")
 
 
 
-TEST TC STRENFTH OVER TIME
+TEST TC STRENGTH OVER TIME
 
 ```{r}
 ggplot(data = TC_Full_iter_time_quant) +
