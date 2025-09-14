@@ -20,7 +20,7 @@ library(ggpubr)
 LOAD IN TC TIME MATRICIES
 
 ```{r}
-setwd("~/Trophic_Cascade_Warming_Submission/TC Strength")
+setwd("~/Trophic_Cascade_Warming_Submission/Revision Files/TC_Strength")
 
 quantiles_sol_TC_time_full <- read.csv("TC_Full_iter_time_quant.csv")
 
