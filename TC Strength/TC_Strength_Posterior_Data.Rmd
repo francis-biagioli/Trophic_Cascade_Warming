@@ -1,0 +1,113 @@
+---
+title: "TC_Strength_Posterior_Data"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(cowplot)
+library(deSolve)
+library(rstan)
+library(deSolve)
+library(coda)
+library(modelbased)
+library(shinystan)
+library(colorspace)
+library(bayesplot)
+library(ggpubr)
+```
+
+LOAD IN TC TIME MATRICIES
+
+```{r}
+sol_TC_14_time_mat <- read.csv("sol_TC_14_time_mat.csv")
+sol_TC_17_time_mat <- read.csv("sol_TC_17_time_mat.csv")
+sol_TC_20_time_mat <- read.csv("sol_TC_20_time_mat.csv")
+sol_TC_23_time_mat <- read.csv("sol_TC_23_time_mat.csv")
+sol_TC_26_time_mat <- read.csv("sol_TC_26_time_mat.csv")
+
+```
+
+CALCULATE TC AVERAGES ACCROSS ITERATIONS
+
+```{r}
+sol_TC_14_iter_avg <- rowMeans(sol_TC_14_time_mat [2:352])
+
+sol_TC_14_iter_avg <- as.data.frame(sol_TC_14_iter_avg) %>%
+  rownames_to_column(var = "iteration") 
+
+sol_TC_14_iter_avg$Temp <- 14
+
+colnames(sol_TC_14_iter_avg) <- c("iteration", "Avg_TC", "Temp")
+
+```
+
+```{r}
+sol_TC_17_iter_avg <-rowMeans(sol_TC_17_time_mat [2:352])
+
+sol_TC_17_iter_avg <- as.data.frame(sol_TC_17_iter_avg) %>%
+  rownames_to_column(var = "iteration") 
+
+sol_TC_17_iter_avg$Temp <- 17
+
+colnames(sol_TC_17_iter_avg) <- c("iteration", "Avg_TC", "Temp")
+
+```
+
+```{r}
+sol_TC_20_iter_avg <-rowMeans(sol_TC_20_time_mat [2:352])
+
+sol_TC_20_iter_avg <- as.data.frame(sol_TC_20_iter_avg) %>%
+  rownames_to_column(var = "iteration") 
+
+sol_TC_20_iter_avg$Temp <- 20
+
+colnames(sol_TC_20_iter_avg) <- c("iteration", "Avg_TC", "Temp")
+
+```
+
+```{r}
+sol_TC_23_iter_avg <-rowMeans(sol_TC_23_time_mat [2:352])
+
+sol_TC_23_iter_avg <- as.data.frame(sol_TC_23_iter_avg) %>%
+  rownames_to_column(var = "iteration") 
+
+sol_TC_23_iter_avg$Temp <- 23
+
+colnames(sol_TC_23_iter_avg) <- c("iteration", "Avg_TC", "Temp")
+
+```
+
+```{r}
+sol_TC_26_iter_avg <-rowMeans(sol_TC_26_time_mat [2:352])
+
+sol_TC_26_iter_avg <- as.data.frame(sol_TC_26_iter_avg) %>%
+  rownames_to_column(var = "iteration") 
+
+sol_TC_26_iter_avg$Temp <- 26
+
+colnames(sol_TC_26_iter_avg) <- c("iteration", "Avg_TC", "Temp")
+
+```
+
+```{r}
+sol_TC_iter_avg_full <- rbind(sol_TC_14_iter_avg, sol_TC_17_iter_avg, sol_TC_20_iter_avg, sol_TC_23_iter_avg, sol_TC_26_iter_avg)
+```
+
+```{r}
+write_csv(sol_TC_iter_avg_full, file = "Avg_TC_full.csv")
+```
+
+
+```{r}
+TC_violin <- ggplot(data = sol_TC_iter_avg_full, aes(x = as.factor(Temp), y = Avg_TC, color = as.factor(Temp))) +
+  geom_violin(draw_quantiles = c(0.025, 0.5, 0.975), lwd = 1.5, show.legend = FALSE) + 
+  scale_color_manual("Temp (°C)", values = c("#05008F", "#125BFF", "#25FFDF", "#FEE000", "#FE6100"))+
+  geom_hline(yintercept = 1, linetype = 2, linewidth = 1.5, alpha = 0.6) +
+  xlab("Temperature (°C)") +
+  ylab("Average Trophic Cascade Strength") +
+  ylim(0.5,2.25) +
+  theme_cowplot(font_size = 24)
+```
+
