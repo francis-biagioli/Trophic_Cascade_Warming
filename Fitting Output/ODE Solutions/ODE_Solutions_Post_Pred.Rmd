@@ -1,0 +1,1225 @@
+---
+title: "ODE_Solutions_Rev"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(cowplot)
+library(deSolve)
+library(rstan)
+library(coda)
+library(modelbased)
+library(shinystan)
+library(colorspace)
+library(bayesplot)
+```
+
+```{r}
+setwd("~/Trophic_Cascade_Warming_Submission/Revision Files/Fitting Output/Draws")
+
+DA_draws <- read.csv("DA_all_draws.csv")
+
+HDA_draws <- read.csv("HDA_all_draws.csv")
+
+```
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////// DEFINE ODE MODELS /////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+```{r}
+DA_odemodel <- function(t, N, p) {
+  dN1dt = (p[1]*N[1]*(1-N[1]*p[2]*exp(p[8]*t)))-(p[3]*N[1]*N[2]/(1+p[7]*(N[2]-0.003333333)+p[3]*p[6]*N[1])) #equation for resource
+  dN2dt = (p[4]*p[3]*N[1]*N[2]/(1+p[7]*(N[2]-0.003333333)+p[3]*p[6]*N[1]))-p[5]*N[2] #equation for consumer
+  return(list(c(dN1dt, dN2dt)))
+}
+```
+
+```{r}
+HDA_odemodel <- function(t, N, p) {
+  dN1dt = (p[1]*N[1]*(1-N[1]*p[2]*exp(p[8]*t)))-(p[3]*N[1]*N[2]/(1+p[7]*(N[2]-0.003333333)+p[3]*p[6]*N[1]))
+  
+  dN2dt = ((p[4]*p[3]*N[1]*N[2])/((1+p[7]*(N[2]-0.003333333))+(p[3]*p[6]*N[1])))-((p[9]*N[2]*N[3])/((1+p[13]*(N[3]-0.003333333))+(p[9]*p[12]*N[2])))-(p[5]*N[2])
+  
+  dN3dt = ((p[10]*p[9]*N[2]*N[3])/((1+p[13]*(N[3]-0.003333333))+(p[9]*p[12]*N[2])))-(p[11]*N[3])
+  
+  return(list(c(dN1dt, dN2dt, dN3dt)))
+}
+```
+
+CALCULATE AVERAGE INITIAL AMOUNG REPLICATRES PER ITERATION
+
+```{r}
+DA_draws <- DA_draws %>%
+  rowwise() %>%
+  mutate(N1_0_avg = mean(c(N1_0.1, N1_0.2, N1_0.3, N1_0.4, N1_0.5), na.rm = TRUE), 
+         N2_0_avg = mean(c(N2_0.1, N2_0.2, N2_0.3, N2_0.4, N2_0.5), na.rm = TRUE))
+
+HDA_draws <- HDA_draws %>%
+  rowwise() %>%
+  mutate(N1_0_avg = mean(c(N1_0.1, N1_0.2, N1_0.3, N1_0.4, N1_0.5), na.rm = TRUE), 
+         N2_0_avg = mean(c(N2_0.1, N2_0.2, N2_0.3, N2_0.4, N2_0.5), na.rm = TRUE),
+         N3_0_avg = mean(c(N3_0.1, N3_0.2, N3_0.3, N3_0.4, N3_0.5), na.rm = TRUE))
+```
+
+```{r}
+DA_14_draws <- DA_draws %>% filter(Temp == 14) %>% ungroup()
+
+HDA_14_draws <- HDA_draws %>% filter(Temp == 14) %>% ungroup() 
+
+DA_17_draws <- DA_draws %>% filter(Temp == 17) %>% ungroup() 
+
+HDA_17_draws <- HDA_draws %>% filter(Temp == 17) %>% ungroup() 
+
+DA_20_draws <- DA_draws %>% filter(Temp == 20) %>% ungroup() 
+
+HDA_20_draws <- HDA_draws %>% filter(Temp == 20) %>% ungroup() 
+
+DA_23_draws <- DA_draws %>% filter(Temp == 23) %>% ungroup()
+
+HDA_23_draws <- HDA_draws %>% filter(Temp == 23) %>% ungroup() 
+
+DA_26_draws <- DA_draws %>% filter(Temp == 26) %>% ungroup() 
+
+HDA_26_draws <- HDA_draws %>% filter(Temp == 26) %>% ungroup()
+```
+
+
+```{r}
+sol_DA_14_alg <- matrix(nrow=21000, ncol = 351)
+
+sol_DA_14_daph <- matrix(nrow=21000, ncol = 351)
+
+for (i in 1:21000) {
+sol_DA_14_alg[i,] <- as.data.frame(lsoda(y = c(DA_14_draws$N1_0_avg[i], 
+                                           DA_14_draws$N2_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = DA_odemodel,
+                             parms = c(DA_14_draws$r[i],
+                                        DA_14_draws$Q[i],
+                                        DA_14_draws$a1[i],
+                                        DA_14_draws$e1[i],
+                                        DA_14_draws$d1[i],
+                                        DA_14_draws$h1[i],
+                                        DA_14_draws$w1[i],
+                                        DA_14_draws$B[i])))[,2]
+}
+
+for (i in 1:21000) {
+sol_DA_14_daph[i,] <- as.data.frame(lsoda(y = c(DA_14_draws$N1_0_avg[i], 
+                                           DA_14_draws$N2_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = DA_odemodel,
+                             parms = c(DA_14_draws$r[i],
+                                        DA_14_draws$Q[i],
+                                        DA_14_draws$a1[i],
+                                        DA_14_draws$e1[i],
+                                        DA_14_draws$d1[i],
+                                        DA_14_draws$h1[i],
+                                        DA_14_draws$w1[i],
+                                        DA_14_draws$B[i])))[,3]
+}
+```
+
+
+```{r}
+sol_HDA_14_alg <- matrix(nrow=15000, ncol = 351)
+
+sol_HDA_14_daph <- matrix(nrow=15000, ncol = 351)
+
+sol_HDA_14_hydra <- matrix(nrow=15000, ncol = 351)
+
+for (i in 1:15000) {
+sol_HDA_14_alg[i,] <- as.data.frame(lsoda(y = c(HDA_14_draws$N1_0_avg[i], 
+                                           HDA_14_draws$N2_0_avg[i],
+                                           HDA_14_draws$N3_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = HDA_odemodel,
+                             parms = c(HDA_14_draws$r[i],
+                                        HDA_14_draws$Q[i],
+                                        HDA_14_draws$a1[i],
+                                        5.447609e-04, #e1
+                                        2.448435e+00, #d1
+                                        HDA_14_draws$h1[i],
+                                        HDA_14_draws$w1[i],
+                                        1.811345e-02, #B 
+                                       HDA_14_draws$a2[i],
+                                       HDA_14_draws$e2[i],
+                                       HDA_14_draws$d2[i],
+                                       HDA_14_draws$h2[i],
+                                       HDA_14_draws$w2[i])))[,2]
+
+}
+
+
+for (i in 1:15000) {
+sol_HDA_14_daph[i,] <- as.data.frame(lsoda(y = c(HDA_14_draws$N1_0_avg[i], 
+                                           HDA_14_draws$N2_0_avg[i],
+                                           HDA_14_draws$N3_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = HDA_odemodel,
+                             parms = c(HDA_14_draws$r[i],
+                                        HDA_14_draws$Q[i],
+                                        HDA_14_draws$a1[i],
+                                        5.447609e-04, #e1
+                                        2.448435e+00, #d1
+                                        HDA_14_draws$h1[i],
+                                        HDA_14_draws$w1[i],
+                                        1.811345e-02, #B 
+                                       HDA_14_draws$a2[i],
+                                       HDA_14_draws$e2[i],
+                                       HDA_14_draws$d2[i],
+                                       HDA_14_draws$h2[i],
+                                       HDA_14_draws$w2[i])))[,3]
+
+}
+
+for (i in 1:15000) {
+sol_HDA_14_hydra[i,] <- as.data.frame(lsoda(y = c(HDA_14_draws$N1_0_avg[i], 
+                                           HDA_14_draws$N2_0_avg[i],
+                                           HDA_14_draws$N3_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = HDA_odemodel,
+                             parms = c(HDA_14_draws$r[i],
+                                        HDA_14_draws$Q[i],
+                                        HDA_14_draws$a1[i],
+                                        5.447609e-04, #e1
+                                        2.448435e+00, #d1
+                                        HDA_14_draws$h1[i],
+                                        HDA_14_draws$w1[i],
+                                        1.811345e-02, #B 
+                                       HDA_14_draws$a2[i],
+                                       HDA_14_draws$e2[i],
+                                       HDA_14_draws$d2[i],
+                                       HDA_14_draws$h2[i],
+                                       HDA_14_draws$w2[i])))[,4]
+
+}
+```
+
+TEMP 14 MATRIX MANIPULATION
+
+```{r}
+sol_DA_14_alg <- as.data.frame(sol_DA_14_alg)
+
+DA_14_alg_iter_time <- sol_DA_14_alg %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+
+sol_DA_14_daph <- as.data.frame(sol_DA_14_daph)
+
+DA_14_daph_iter_time <- sol_DA_14_daph %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+```
+
+```{r}
+DA_14_alg_iter_time_quant <- DA_14_alg_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+DA_14_alg_iter_time_quant$Species <- "Alg"
+
+DA_14_daph_iter_time_quant <- DA_14_daph_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+DA_14_daph_iter_time_quant$Species <- "Daph"
+```
+
+```{r}
+DA_14_full_time_quant <- rbind(DA_14_alg_iter_time_quant, DA_14_daph_iter_time_quant)
+
+DA_14_full_time_quant$Temp <- 14 
+```
+
+```{r}
+sol_HDA_14_alg <- as.data.frame(sol_HDA_14_alg)
+
+HDA_14_alg_iter_time <- sol_HDA_14_alg %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+
+sol_HDA_14_daph <- as.data.frame(sol_HDA_14_daph)
+
+HDA_14_daph_iter_time <- sol_HDA_14_daph %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+sol_HDA_14_hydra <- as.data.frame(sol_HDA_14_hydra)
+
+HDA_14_hydra_iter_time <- sol_HDA_14_hydra %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+```
+
+```{r}
+HDA_14_alg_iter_time_quant <- HDA_14_alg_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+HDA_14_alg_iter_time_quant$Species <- "Alg"
+
+HDA_14_daph_iter_time_quant <- HDA_14_daph_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+HDA_14_daph_iter_time_quant$Species <- "Daph"
+
+HDA_14_hydra_iter_time_quant <- HDA_14_hydra_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+HDA_14_hydra_iter_time_quant$Species <- "Hydra"
+```
+
+```{r}
+HDA_14_full_time_quant <- rbind(HDA_14_alg_iter_time_quant, HDA_14_daph_iter_time_quant, HDA_14_hydra_iter_time_quant)
+
+HDA_14_full_time_quant$Temp <- 14 
+```
+
+TEMP 17
+
+```{r}
+sol_DA_17_alg <- matrix(nrow=15000, ncol = 351)
+
+sol_DA_17_daph <- matrix(nrow=15000, ncol = 351)
+
+for (i in 1:15000) {
+sol_DA_17_alg[i,] <- as.data.frame(lsoda(y = c(DA_17_draws$N1_0_avg[i], 
+                                           DA_17_draws$N2_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = DA_odemodel,
+                             parms = c(DA_17_draws$r[i],
+                                        DA_17_draws$Q[i],
+                                        DA_17_draws$a1[i],
+                                        DA_17_draws$e1[i],
+                                        DA_17_draws$d1[i],
+                                        DA_17_draws$h1[i],
+                                        DA_17_draws$w1[i],
+                                        DA_17_draws$B[i])))[,2]
+}
+
+for (i in 1:15000) {
+sol_DA_17_daph[i,] <- as.data.frame(lsoda(y = c(DA_17_draws$N1_0_avg[i], 
+                                           DA_17_draws$N2_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = DA_odemodel,
+                             parms = c(DA_17_draws$r[i],
+                                        DA_17_draws$Q[i],
+                                        DA_17_draws$a1[i],
+                                        DA_17_draws$e1[i],
+                                        DA_17_draws$d1[i],
+                                        DA_17_draws$h1[i],
+                                        DA_17_draws$w1[i],
+                                        DA_17_draws$B[i])))[,3]
+}
+```
+
+```{r}
+sol_HDA_17_alg <- matrix(nrow=15000, ncol = 351)
+
+sol_HDA_17_daph <- matrix(nrow=15000, ncol = 351)
+
+sol_HDA_17_hydra <- matrix(nrow=15000, ncol = 351)
+
+for (i in 1:15000) {
+sol_HDA_17_alg[i,] <- as.data.frame(lsoda(y = c(HDA_17_draws$N1_0_avg[i], 
+                                           HDA_17_draws$N2_0_avg[i],
+                                           HDA_17_draws$N3_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = HDA_odemodel,
+                             parms = c(HDA_17_draws$r[i],
+                                        HDA_17_draws$Q[i],
+                                        HDA_17_draws$a1[i],
+                                        2.455467e-05, # e1
+                                        1.125211e+00, #d1
+                                        HDA_17_draws$h1[i],
+                                        HDA_17_draws$w1[i],
+                                        7.995986e-02, #B 
+                                       HDA_17_draws$a2[i],
+                                       HDA_17_draws$e2[i],
+                                       HDA_17_draws$d2[i],
+                                       HDA_17_draws$h2[i],
+                                       HDA_17_draws$w2[i])))[,2]
+
+}
+
+
+for (i in 1:15000) {
+sol_HDA_17_daph[i,] <- as.data.frame(lsoda(y = c(HDA_17_draws$N1_0_avg[i], 
+                                           HDA_17_draws$N2_0_avg[i],
+                                           HDA_17_draws$N3_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = HDA_odemodel,
+                             parms = c(HDA_17_draws$r[i],
+                                        HDA_17_draws$Q[i],
+                                        HDA_17_draws$a1[i],
+                                        2.455467e-05, # e1
+                                        1.125211e+00, #d1
+                                        HDA_17_draws$h1[i],
+                                        HDA_17_draws$w1[i],
+                                        7.995986e-02, #B 
+                                       HDA_17_draws$a2[i],
+                                       HDA_17_draws$e2[i],
+                                       HDA_17_draws$d2[i],
+                                       HDA_17_draws$h2[i],
+                                       HDA_17_draws$w2[i])))[,3]
+
+}
+
+for (i in 1:15000) {
+sol_HDA_17_hydra[i,] <- as.data.frame(lsoda(y = c(HDA_17_draws$N1_0_avg[i], 
+                                           HDA_17_draws$N2_0_avg[i],
+                                           HDA_17_draws$N3_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = HDA_odemodel,
+                             parms = c(HDA_17_draws$r[i],
+                                        HDA_17_draws$Q[i],
+                                        HDA_17_draws$a1[i],
+                                        2.455467e-05, # e1
+                                        1.125211e+00, #d1
+                                        HDA_17_draws$h1[i],
+                                        HDA_17_draws$w1[i],
+                                        7.995986e-02, #B 
+                                       HDA_17_draws$a2[i],
+                                       HDA_17_draws$e2[i],
+                                       HDA_17_draws$d2[i],
+                                       HDA_17_draws$h2[i],
+                                       HDA_17_draws$w2[i])))[,4]
+
+}
+```
+
+
+TEMP 17 MATRIX MANIPULATION
+
+```{r}
+sol_DA_17_alg <- as.data.frame(sol_DA_17_alg)
+
+DA_17_alg_iter_time <- sol_DA_17_alg %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+
+sol_DA_17_daph <- as.data.frame(sol_DA_17_daph)
+
+DA_17_daph_iter_time <- sol_DA_17_daph %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+```
+
+```{r}
+DA_17_alg_iter_time_quant <- DA_17_alg_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+DA_17_alg_iter_time_quant$Species <- "Alg"
+
+DA_17_daph_iter_time_quant <- DA_17_daph_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+DA_17_daph_iter_time_quant$Species <- "Daph"
+```
+
+```{r}
+DA_17_full_time_quant <- rbind(DA_17_alg_iter_time_quant, DA_17_daph_iter_time_quant)
+
+DA_17_full_time_quant$Temp <- 17 
+```
+
+```{r}
+sol_HDA_17_alg <- as.data.frame(sol_HDA_17_alg)
+
+HDA_17_alg_iter_time <- sol_HDA_17_alg %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+
+sol_HDA_17_daph <- as.data.frame(sol_HDA_17_daph)
+
+HDA_17_daph_iter_time <- sol_HDA_17_daph %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+sol_HDA_17_hydra <- as.data.frame(sol_HDA_17_hydra)
+
+HDA_17_hydra_iter_time <- sol_HDA_17_hydra %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+```
+
+```{r}
+HDA_17_alg_iter_time_quant <- HDA_17_alg_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+HDA_17_alg_iter_time_quant$Species <- "Alg"
+
+HDA_17_daph_iter_time_quant <- HDA_17_daph_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+HDA_17_daph_iter_time_quant$Species <- "Daph"
+
+HDA_17_hydra_iter_time_quant <- HDA_17_hydra_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+HDA_17_hydra_iter_time_quant$Species <- "Hydra"
+```
+
+```{r}
+HDA_17_full_time_quant <- rbind(HDA_17_alg_iter_time_quant, HDA_17_daph_iter_time_quant, HDA_17_hydra_iter_time_quant)
+
+HDA_17_full_time_quant$Temp <- 17 
+```
+
+TEMP 20
+
+```{r}
+sol_DA_20_alg <- matrix(nrow=15000, ncol = 351)
+
+sol_DA_20_daph <- matrix(nrow=15000, ncol = 351)
+
+for (i in 1:15000) {
+sol_DA_20_alg[i,] <- as.data.frame(lsoda(y = c(DA_20_draws$N1_0_avg[i], 
+                                           DA_20_draws$N2_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = DA_odemodel,
+                             parms = c(DA_20_draws$r[i],
+                                        DA_20_draws$Q[i],
+                                        DA_20_draws$a1[i],
+                                        DA_20_draws$e1[i],
+                                        DA_20_draws$d1[i],
+                                        DA_20_draws$h1[i],
+                                        DA_20_draws$w1[i],
+                                        DA_20_draws$B[i])))[,2]
+}
+
+for (i in 1:15000) {
+sol_DA_20_daph[i,] <- as.data.frame(lsoda(y = c(DA_20_draws$N1_0_avg[i], 
+                                           DA_20_draws$N2_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = DA_odemodel,
+                             parms = c(DA_20_draws$r[i],
+                                        DA_20_draws$Q[i],
+                                        DA_20_draws$a1[i],
+                                        DA_20_draws$e1[i],
+                                        DA_20_draws$d1[i],
+                                        DA_20_draws$h1[i],
+                                        DA_20_draws$w1[i],
+                                        DA_20_draws$B[i])))[,3]
+}
+```
+
+
+```{r}
+sol_HDA_20_alg <- matrix(nrow=15000, ncol = 351)
+
+sol_HDA_20_daph <- matrix(nrow=15000, ncol = 351)
+
+sol_HDA_20_hydra <- matrix(nrow=15000, ncol = 351)
+
+for (i in 1:15000) {
+sol_HDA_20_alg[i,] <- as.data.frame(lsoda(y = c(HDA_20_draws$N1_0_avg[i], 
+                                           HDA_20_draws$N2_0_avg[i],
+                                           HDA_20_draws$N3_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = HDA_odemodel,
+                             parms = c(HDA_20_draws$r[i],
+                                        HDA_20_draws$Q[i],
+                                        HDA_20_draws$a1[i],
+                                        4.437980e-05, # e1
+                                        1.988016e+00, #d1
+                                        HDA_20_draws$h1[i],
+                                        HDA_20_draws$w1[i],
+                                        8.957620e-02, #B 
+                                       HDA_20_draws$a2[i],
+                                       HDA_20_draws$e2[i],
+                                       HDA_20_draws$d2[i],
+                                       HDA_20_draws$h2[i],
+                                       HDA_20_draws$w2[i])))[,2]
+
+}
+
+for (i in 1:15000) {
+sol_HDA_20_daph[i,] <- as.data.frame(lsoda(y = c(HDA_20_draws$N1_0_avg[i], 
+                                           HDA_20_draws$N2_0_avg[i],
+                                           HDA_20_draws$N3_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = HDA_odemodel,
+                             parms = c(HDA_20_draws$r[i],
+                                        HDA_20_draws$Q[i],
+                                        HDA_20_draws$a1[i],
+                                        4.437980e-05, # e1
+                                        1.988016e+00, #d1
+                                        HDA_20_draws$h1[i],
+                                        HDA_20_draws$w1[i],
+                                        8.957620e-02, #B 
+                                       HDA_20_draws$a2[i],
+                                       HDA_20_draws$e2[i],
+                                       HDA_20_draws$d2[i],
+                                       HDA_20_draws$h2[i],
+                                       HDA_20_draws$w2[i])))[,3]
+
+}
+
+for (i in 1:15000) {
+sol_HDA_20_hydra[i,] <- as.data.frame(lsoda(y = c(HDA_20_draws$N1_0_avg[i], 
+                                           HDA_20_draws$N2_0_avg[i],
+                                           HDA_20_draws$N3_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = HDA_odemodel,
+                             parms = c(HDA_20_draws$r[i],
+                                        HDA_20_draws$Q[i],
+                                        HDA_20_draws$a1[i],
+                                        4.437980e-05, # e1
+                                        1.988016e+00, #d1
+                                        HDA_20_draws$h1[i],
+                                        HDA_20_draws$w1[i],
+                                        8.957620e-02, #B 
+                                       HDA_20_draws$a2[i],
+                                       HDA_20_draws$e2[i],
+                                       HDA_20_draws$d2[i],
+                                       HDA_20_draws$h2[i],
+                                       HDA_20_draws$w2[i])))[,4]
+
+}
+```
+
+TEMP 20 MATRIX MANIPULATION
+
+```{r}
+sol_DA_20_alg <- as.data.frame(sol_DA_20_alg)
+
+DA_20_alg_iter_time <- sol_DA_20_alg %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+
+sol_DA_20_daph <- as.data.frame(sol_DA_20_daph)
+
+DA_20_daph_iter_time <- sol_DA_20_daph %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+```
+
+```{r}
+DA_20_alg_iter_time_quant <- DA_20_alg_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+DA_20_alg_iter_time_quant$Species <- "Alg"
+
+DA_20_daph_iter_time_quant <- DA_20_daph_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+DA_20_daph_iter_time_quant$Species <- "Daph"
+```
+
+```{r}
+DA_20_full_time_quant <- rbind(DA_20_alg_iter_time_quant, DA_20_daph_iter_time_quant)
+
+DA_20_full_time_quant$Temp <- 20 
+```
+
+```{r}
+sol_HDA_20_alg <- as.data.frame(sol_HDA_20_alg)
+
+HDA_20_alg_iter_time <- sol_HDA_20_alg %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+
+sol_HDA_20_daph <- as.data.frame(sol_HDA_20_daph)
+
+HDA_20_daph_iter_time <- sol_HDA_20_daph %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+sol_HDA_20_hydra <- as.data.frame(sol_HDA_20_hydra)
+
+HDA_20_hydra_iter_time <- sol_HDA_20_hydra %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+```
+
+```{r}
+HDA_20_alg_iter_time_quant <- HDA_20_alg_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+HDA_20_alg_iter_time_quant$Species <- "Alg"
+
+HDA_20_daph_iter_time_quant <- HDA_20_daph_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+HDA_20_daph_iter_time_quant$Species <- "Daph"
+
+HDA_20_hydra_iter_time_quant <- HDA_20_hydra_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+HDA_20_hydra_iter_time_quant$Species <- "Hydra"
+```
+
+```{r}
+HDA_20_full_time_quant <- rbind(HDA_20_alg_iter_time_quant, HDA_20_daph_iter_time_quant, HDA_20_hydra_iter_time_quant)
+
+HDA_20_full_time_quant$Temp <- 20
+```
+
+TEMP 23
+
+```{r}
+sol_DA_23_alg <- matrix(nrow=15000, ncol = 351)
+
+sol_DA_23_daph <- matrix(nrow=15000, ncol = 351)
+
+for (i in 1:15000) {
+sol_DA_23_alg[i,] <- as.data.frame(lsoda(y = c(DA_23_draws$N1_0_avg[i], 
+                                           DA_23_draws$N2_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = DA_odemodel,
+                             parms = c(DA_23_draws$r[i],
+                                        DA_23_draws$Q[i],
+                                        DA_23_draws$a1[i],
+                                        DA_23_draws$e1[i],
+                                        DA_23_draws$d1[i],
+                                        DA_23_draws$h1[i],
+                                        DA_23_draws$w1[i],
+                                        DA_23_draws$B[i])))[,2]
+}
+
+for (i in 1:15000) {
+sol_DA_23_daph[i,] <- as.data.frame(lsoda(y = c(DA_23_draws$N1_0_avg[i], 
+                                           DA_23_draws$N2_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = DA_odemodel,
+                             parms = c(DA_23_draws$r[i],
+                                        DA_23_draws$Q[i],
+                                        DA_23_draws$a1[i],
+                                        DA_23_draws$e1[i],
+                                        DA_23_draws$d1[i],
+                                        DA_23_draws$h1[i],
+                                        DA_23_draws$w1[i],
+                                        DA_23_draws$B[i])))[,3]
+}
+```
+
+```{r}
+sol_HDA_23_alg <- matrix(nrow=15000, ncol = 351)
+
+sol_HDA_23_daph <- matrix(nrow=15000, ncol = 351)
+
+sol_HDA_23_hydra <- matrix(nrow=15000, ncol = 351)
+
+for (i in 1:15000) {
+sol_HDA_23_alg[i,] <- as.data.frame(lsoda(y = c(HDA_23_draws$N1_0_avg[i], 
+                                           HDA_23_draws$N2_0_avg[i],
+                                           HDA_23_draws$N3_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = HDA_odemodel,
+                             parms = c(HDA_23_draws$r[i],
+                                        HDA_23_draws$Q[i],
+                                        HDA_23_draws$a1[i],
+                                        1.021355e-05, # e1
+                                        1.943547e+00, #d1
+                                        HDA_23_draws$h1[i],
+                                        HDA_23_draws$w1[i],
+                                        7.738450e-02, #B 
+                                       HDA_23_draws$a2[i],
+                                       HDA_23_draws$e2[i],
+                                       HDA_23_draws$d2[i],
+                                       HDA_23_draws$h2[i],
+                                       HDA_23_draws$w2[i])))[,2]
+
+}
+
+for (i in 1:15000) {
+sol_HDA_23_daph[i,] <- as.data.frame(lsoda(y = c(HDA_23_draws$N1_0_avg[i], 
+                                           HDA_23_draws$N2_0_avg[i],
+                                           HDA_23_draws$N3_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = HDA_odemodel,
+                             parms = c(HDA_23_draws$r[i],
+                                        HDA_23_draws$Q[i],
+                                        HDA_23_draws$a1[i],
+                                        1.021355e-05, # e1
+                                        1.943547e+00, #d1
+                                        HDA_23_draws$h1[i],
+                                        HDA_23_draws$w1[i],
+                                        7.738450e-02, #B 
+                                       HDA_23_draws$a2[i],
+                                       HDA_23_draws$e2[i],
+                                       HDA_23_draws$d2[i],
+                                       HDA_23_draws$h2[i],
+                                       HDA_23_draws$w2[i])))[,3]
+
+}
+
+for (i in 1:15000) {
+sol_HDA_23_hydra[i,] <- as.data.frame(lsoda(y = c(HDA_23_draws$N1_0_avg[i], 
+                                           HDA_23_draws$N2_0_avg[i],
+                                           HDA_23_draws$N3_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = HDA_odemodel,
+                             parms = c(HDA_23_draws$r[i],
+                                        HDA_23_draws$Q[i],
+                                        HDA_23_draws$a1[i],
+                                        1.021355e-05, # e1
+                                        1.943547e+00, #d1
+                                        HDA_23_draws$h1[i],
+                                        HDA_23_draws$w1[i],
+                                        7.738450e-02, #B 
+                                       HDA_23_draws$a2[i],
+                                       HDA_23_draws$e2[i],
+                                       HDA_23_draws$d2[i],
+                                       HDA_23_draws$h2[i],
+                                       HDA_23_draws$w2[i])))[,4]
+
+}
+```
+
+TEMP 23 MATRIX MANIPULATION
+
+```{r}
+sol_DA_23_alg <- as.data.frame(sol_DA_23_alg)
+
+DA_23_alg_iter_time <- sol_DA_23_alg %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+
+sol_DA_23_daph <- as.data.frame(sol_DA_23_daph)
+
+DA_23_daph_iter_time <- sol_DA_23_daph %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+```
+
+```{r}
+DA_23_alg_iter_time_quant <- DA_23_alg_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+DA_23_alg_iter_time_quant$Species <- "Alg"
+
+DA_23_daph_iter_time_quant <- DA_23_daph_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+DA_23_daph_iter_time_quant$Species <- "Daph"
+```
+
+```{r}
+DA_23_full_time_quant <- rbind(DA_23_alg_iter_time_quant, DA_23_daph_iter_time_quant)
+
+DA_23_full_time_quant$Temp <- 23
+```
+
+```{r}
+sol_HDA_23_alg <- as.data.frame(sol_HDA_23_alg)
+
+HDA_23_alg_iter_time <- sol_HDA_23_alg %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+
+sol_HDA_23_daph <- as.data.frame(sol_HDA_23_daph)
+
+HDA_23_daph_iter_time <- sol_HDA_23_daph %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+sol_HDA_23_hydra <- as.data.frame(sol_HDA_23_hydra)
+
+HDA_23_hydra_iter_time <- sol_HDA_23_hydra %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+```
+
+```{r}
+HDA_23_alg_iter_time_quant <- HDA_23_alg_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+HDA_23_alg_iter_time_quant$Species <- "Alg"
+
+HDA_23_daph_iter_time_quant <- HDA_23_daph_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+HDA_23_daph_iter_time_quant$Species <- "Daph"
+
+HDA_23_hydra_iter_time_quant <- HDA_23_hydra_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+HDA_23_hydra_iter_time_quant$Species <- "Hydra"
+```
+
+```{r}
+HDA_23_full_time_quant <- rbind(HDA_23_alg_iter_time_quant, HDA_23_daph_iter_time_quant, HDA_23_hydra_iter_time_quant)
+
+HDA_23_full_time_quant$Temp <- 23
+```
+
+TEMP 26
+
+```{r}
+sol_DA_26_alg <- matrix(nrow=15000, ncol = 351)
+
+sol_DA_26_daph <- matrix(nrow=15000, ncol = 351)
+
+for (i in 1:15000) {
+sol_DA_26_alg[i,] <- as.data.frame(lsoda(y = c(DA_26_draws$N1_0_avg[i], 
+                                           DA_26_draws$N2_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = DA_odemodel,
+                             parms = c(DA_26_draws$r[i],
+                                        DA_26_draws$Q[i],
+                                        DA_26_draws$a1[i],
+                                        DA_26_draws$e1[i],
+                                        DA_26_draws$d1[i],
+                                        DA_26_draws$h1[i],
+                                        DA_26_draws$w1[i],
+                                        DA_26_draws$B[i])))[,2]
+}
+
+for (i in 1:15000) {
+sol_DA_26_daph[i,] <- as.data.frame(lsoda(y = c(DA_26_draws$N1_0_avg[i], 
+                                           DA_26_draws$N2_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = DA_odemodel,
+                             parms = c(DA_26_draws$r[i],
+                                        DA_26_draws$Q[i],
+                                        DA_26_draws$a1[i],
+                                        DA_26_draws$e1[i],
+                                        DA_26_draws$d1[i],
+                                        DA_26_draws$h1[i],
+                                        DA_26_draws$w1[i],
+                                        DA_26_draws$B[i])))[,3]
+}
+```
+
+```{r}
+sol_HDA_26_alg <- matrix(nrow=15000, ncol = 351)
+
+sol_HDA_26_daph <- matrix(nrow=15000, ncol = 351)
+
+sol_HDA_26_hydra <- matrix(nrow=15000, ncol = 351)
+
+for (i in 1:15000) {
+sol_HDA_26_alg[i,] <- as.data.frame(lsoda(y = c(HDA_26_draws$N1_0_avg[i], 
+                                           HDA_26_draws$N2_0_avg[i],
+                                           HDA_26_draws$N3_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = HDA_odemodel,
+                             parms = c(HDA_26_draws$r[i],
+                                        HDA_26_draws$Q[i],
+                                        HDA_26_draws$a1[i],
+                                        5.038341e-05, #e1
+                                        4.095059e+00, #d1
+                                        HDA_26_draws$h1[i],
+                                        HDA_26_draws$w1[i],
+                                        9.847838e-02, #B
+                                       HDA_26_draws$a2[i],
+                                       HDA_26_draws$e2[i],
+                                       HDA_26_draws$d2[i],
+                                       HDA_26_draws$h2[i],
+                                       HDA_26_draws$w2[i])))[,2]
+
+}
+
+for (i in 1:15000) {
+sol_HDA_26_daph[i,] <- as.data.frame(lsoda(y = c(HDA_26_draws$N1_0_avg[i], 
+                                           HDA_26_draws$N2_0_avg[i],
+                                           HDA_26_draws$N3_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = HDA_odemodel,
+                             parms = c(HDA_26_draws$r[i],
+                                        HDA_26_draws$Q[i],
+                                        HDA_26_draws$a1[i],
+                                        5.038341e-05, #e1
+                                        4.095059e+00, #d1
+                                        HDA_26_draws$h1[i],
+                                        HDA_26_draws$w1[i],
+                                        9.847838e-02, #B
+                                       HDA_26_draws$a2[i],
+                                       HDA_26_draws$e2[i],
+                                       HDA_26_draws$d2[i],
+                                       HDA_26_draws$h2[i],
+                                       HDA_26_draws$w2[i])))[,3]
+
+}
+
+for (i in 1:15000) {
+sol_HDA_26_hydra[i,] <- as.data.frame(lsoda(y = c(HDA_26_draws$N1_0_avg[i], 
+                                           HDA_26_draws$N2_0_avg[i],
+                                           HDA_26_draws$N3_0_avg[i]),
+                             times = seq(0,35, by = 0.1),
+                             func = HDA_odemodel,
+                             parms = c(HDA_26_draws$r[i],
+                                        HDA_26_draws$Q[i],
+                                        HDA_26_draws$a1[i],
+                                        5.038341e-05, #e1
+                                        4.095059e+00, #d1
+                                        HDA_26_draws$h1[i],
+                                        HDA_26_draws$w1[i],
+                                        9.847838e-02, #B
+                                       HDA_26_draws$a2[i],
+                                       HDA_26_draws$e2[i],
+                                       HDA_26_draws$d2[i],
+                                       HDA_26_draws$h2[i],
+                                       HDA_26_draws$w2[i])))[,4]
+
+}
+
+```
+
+TEMP 26 MATRIX MANIPULATION
+
+```{r}
+sol_DA_26_alg <- as.data.frame(sol_DA_26_alg)
+
+DA_26_alg_iter_time <- sol_DA_26_alg %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+
+sol_DA_26_daph <- as.data.frame(sol_DA_26_daph)
+
+DA_26_daph_iter_time <- sol_DA_26_daph %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+```
+
+```{r}
+DA_26_alg_iter_time_quant <- DA_26_alg_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+DA_26_alg_iter_time_quant$Species <- "Alg"
+
+DA_26_daph_iter_time_quant <- DA_26_daph_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+DA_26_daph_iter_time_quant$Species <- "Daph"
+```
+
+```{r}
+DA_26_full_time_quant <- rbind(DA_26_alg_iter_time_quant, DA_26_daph_iter_time_quant)
+
+DA_26_full_time_quant$Temp <- 26
+```
+
+```{r}
+sol_HDA_26_alg <- as.data.frame(sol_HDA_26_alg)
+
+HDA_26_alg_iter_time <- sol_HDA_26_alg %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+
+sol_HDA_26_daph <- as.data.frame(sol_HDA_26_daph)
+
+HDA_26_daph_iter_time <- sol_HDA_26_daph %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+
+sol_HDA_26_hydra <- as.data.frame(sol_HDA_26_hydra)
+
+HDA_26_hydra_iter_time <- sol_HDA_26_hydra %>%
+  rownames_to_column(var = "iteration") %>%         # Add iteration column
+  gather(key = "time_step", value = "Abundance", -iteration) %>%  # Reshape to long format
+  mutate(time_step = as.numeric(gsub("V", "", time_step)))  # Clean up time_step column
+```
+
+```{r}
+HDA_26_alg_iter_time_quant <- HDA_26_alg_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+HDA_26_alg_iter_time_quant$Species <- "Alg"
+
+HDA_26_daph_iter_time_quant <- HDA_26_daph_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+HDA_26_daph_iter_time_quant$Species <- "Daph"
+
+HDA_26_hydra_iter_time_quant <- HDA_26_hydra_iter_time %>%
+  group_by(time_step) %>%                      # Group by time steps
+  summarise(
+    q2.5 = quantile(Abundance, 0.025),         # 2.5% quantile
+    q50 = quantile(Abundance, 0.50),           # 50% quantile (median)
+    q97.5 = quantile(Abundance, 0.975)         # 97.5% quantile
+  )
+
+HDA_26_hydra_iter_time_quant$Species <- "Hydra"
+```
+
+```{r}
+HDA_26_full_time_quant <- rbind(HDA_26_alg_iter_time_quant, HDA_26_daph_iter_time_quant, HDA_26_hydra_iter_time_quant)
+
+HDA_26_full_time_quant$Temp <- 26
+```
+
+```{r}
+DA_full_time_quant <- rbind(DA_26_full_time_quant, DA_23_full_time_quant, DA_20_full_time_quant, DA_17_full_time_quant, DA_14_full_time_quant)
+
+HDA_full_time_quant <- rbind(HDA_26_full_time_quant, HDA_23_full_time_quant, HDA_20_full_time_quant, HDA_17_full_time_quant, HDA_14_full_time_quant)
+```
+
+```{r}
+DA_full_time_quant <- DA_full_time_quant %>%
+  mutate(Time = time_step*0.1)
+
+HDA_full_time_quant <- HDA_full_time_quant %>%
+  mutate(Time = time_step*0.1)
+```
+
+
+```{r}
+write.csv(DA_full_time_quant, file = "DA_ODE_Solutions_quant.csv")
+
+write.csv(HDA_full_time_quant, file = "HDA_ODE_Solutions_quant.csv")
+```
+
+
