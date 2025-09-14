@@ -1,0 +1,297 @@
+---
+title: "Residuals_Check"
+output: html_document
+---
+```{r}
+library(tidyverse)
+library(lubridate)
+library(cowplot)
+library(deSolve)
+library(rstan)
+library(coda)
+library(modelbased)
+library(shinystan)
+library(msm)
+```
+
+```{r}
+#read in Data
+setwd("~/Trophic_Cascade_Warming_Submission")
+
+TCTempDataFull <- read.csv("TC_Temp_Data_Full.csv")
+```
+
+FORMAT DATES AND CALCULATE CELL DENSITIES
+
+```{r}
+#DATES
+TCTempDataFull$Date <- as.Date(TCTempDataFull$Date, format = "%m/%d/%Y")
+
+#CREATE DENSITY
+TCTempDataFull <- TCTempDataFull %>% mutate(SppPerML = Count/Volume..mL.)
+```
+
+CREATE DAYS SINCE START VARIABLE
+
+```{r}
+#add days since start instead of dates
+
+jars <- unique(TCTempDataFull$Jar.ID)#get a list of all the unique jars
+
+TCTempDataFull$days.since.start <- NA#just making an empty column
+
+min.date <- vector()#empty vector for all the minimum jar dates
+
+for(i in jars){#iteratively figure out the min date for each jar
+  dates <- TCTempDataFull$Date[TCTempDataFull$Jar.ID==i]
+  min.date[i] <- min(dates)
+}
+
+TCTempDataFull$days.since.start <- TCTempDataFull$Date-min.date[TCTempDataFull$Jar.ID]#subtract!
+TCTempDataFull$days.since.start <- as.numeric(TCTempDataFull$days.since.start)#fix
+```
+
+FILTER TO TARGET TEMP AND REMOVE HYDRA JARS FROM DATA
+
+```{r}
+#remove hydra dishes
+TCTempDataJar_Temp_i <- TCTempDataFull %>% 
+  filter(Temp == 20, Community.ID != "P-A")
+```
+
+```{r}
+load("~/Trophic_Cascade_Warming_Submission//Fitting/HDA_20_Lognormal_liklihood/HDA_20_fit")
+```
+
+```{r}
+HDA_ode_func <- function(t, state, parms) {
+  with(as.list(c(state, parms)), {
+    dN1 <- (r * N1 * (1 - N1 * Q * exp(B * t))) - 
+           (a1 * N1 * N2 / (1 + w1 * (N2 - 0.003333) + a1 * h1 * N1))
+    
+    dN2 <- (e1 * a1 * N1 * N2 / (1 + w1 * (N2 - 0.003333) + a1 * h1 * N1)) - (a2 * N3 * N2 / (1 + w2 * (N3 -0.003333) + a2 * h2 * N2)) -
+           (d1 * N2)
+    
+    dN3 <- (e2 * a2 * N2 * N3 / (1 + w2 * (N3 - 0.003333) + a2 * h2 * N2)) - 
+           (d2 * N3)
+    
+    list(c(dN1, dN2, dN3))
+  })
+}
+
+```
+
+```{r}
+post <- extract(HDA_20_fit)
+```
+
+SET UP POSTERIOR SOLUTIONS
+
+```{r}
+# 1. Sample indices from posterior
+posterior_samples <- 1:6000  # or sample(1:length(post$r), 1500) if you want a subset
+
+t <- unique(TCTempDataJar_Temp_i$days.since.start)
+
+# 2. Set up empty arrays to store predictions and residuals
+n_time <- length(t) # NUM OF OBSERVATIONS
+n_reps <- length(unique(TCTempDataJar_Temp_i$Jar.ID)) # NUM OF REPLICATES
+n_draws <- length(posterior_samples) # NUM OF ITERATIONS
+
+N1_pred_array <- array(NA, dim = c(n_draws, n_reps, n_time)) # STORAGE FOR PREDICTED VALUES OF ALGE
+N2_pred_array <- array(NA, dim = c(n_draws, n_reps, n_time)) # STORAGE OF PREDICTED VLAUES OF DAPH
+N3_pred_array <- array(NA, dim = c(n_draws, n_reps, n_time)) # STORAGE OF PREDICTED VLAUES OF HYDRA
+
+# 3. Loop over posterior draws and replicates
+for (i in seq_along(posterior_samples)) {
+  idx <- posterior_samples[i]
+  
+  # Parameters from draw i
+  parms <- list(
+    r  = post$r[idx],
+    Q  = post$Q[idx],
+    a1 = post$a1[idx],
+    e1 = 4.437980e-05, 
+    d1 = 1.988016e+00,
+    h1 = post$h1[idx],
+    w1 = post$w1[idx],
+    B  = 8.957620e-02,
+    a2 = post$a2[idx],
+    e2 = post$e2[idx],
+    h2 = post$h2[idx],
+    d2 = post$d2[idx],
+    w2 = post$w2[idx]
+  )
+  
+  for (j in 1:n_reps) {
+    y0 <- c(N1 = post$N1_0[idx, j], N2 = post$N2_0[idx, j], N3 = post$N3_0[idx, j])
+    
+    out <- ode(y = y0, times = t, func = HDA_ode_func, parms = parms, method = "lsoda")
+    
+    N1_pred_array[i, j, ] <- out[, "N1"]
+    N2_pred_array[i, j, ] <- out[, "N2"]
+    N3_pred_array[i, j, ] <- out[, "N3"]
+  }
+}
+
+```
+
+CALCULATE RESIDUALS
+
+```{r}
+# Observed values
+obs_df <- TCTempDataJar_Temp_i %>%
+  select(Jar.ID, days.since.start, Species, SppPerML) %>%
+  mutate(replicate = as.numeric(factor(Jar.ID)),
+         time = days.since.start)
+
+# 1. Pivot observed data to wide format
+obs_wide <- obs_df %>%
+  filter(Species %in% c("Ank", "Daph", "Hydra")) %>%
+  select(replicate, time, Species, SppPerML) %>%
+  pivot_wider(names_from = Species, values_from = SppPerML, names_prefix = "obs_")
+
+# 2. Initialize list to hold residuals
+resid_list <- vector("list", length = n_draws)
+
+# 3. Loop through draws and calculate residuals
+for (i in 1:n_draws) {
+  N1_df <- as.data.frame(N1_pred_array[i, , ])
+  N2_df <- as.data.frame(N2_pred_array[i, , ])
+  N3_df <- as.data.frame(N3_pred_array[i, , ])
+  
+  colnames(N1_df) <- colnames(N2_df) <- colnames(N3_df) <- as.character(t)
+  
+  N1_long <- pivot_longer(N1_df, everything(), names_to = "time", values_to = "N1_pred")
+  N2_long <- pivot_longer(N2_df, everything(), names_to = "time", values_to = "N2_pred")
+  N3_long <- pivot_longer(N3_df, everything(), names_to = "time", values_to = "N3_pred")
+  
+  N1_long$replicate <- rep(1:n_reps, each = n_time)
+  N2_long$replicate <- rep(1:n_reps, each = n_time)
+  N3_long$replicate <- rep(1:n_reps, each = n_time)
+  N1_long$draw <- i
+  N2_long$draw <- i
+  N3_long$draw <- i
+  
+ joined <- left_join(N1_long, N2_long, by = c("replicate", "time", "draw")) %>%
+  left_join(N3_long, by = c("replicate", "time", "draw")) %>%
+  mutate(time = as.numeric(time)) %>%
+  left_join(obs_wide, by = c("replicate", "time")) %>%
+  mutate(
+    N1_resid = obs_Ank - N1_pred,
+    N2_resid = obs_Daph - N2_pred,
+    N3_resid = obs_Hydra - N3_pred
+  )
+
+  
+  resid_list[[i]] <- joined
+}
+
+# 4. Combine all into one dataframe
+resid_all <- bind_rows(resid_list)
+```
+
+CLACULATE RESIDUAL QUANTILES
+
+```{r}
+resid_summary <- resid_all %>%
+  pivot_longer(
+    cols = c(N1_resid, N2_resid, N3_resid),
+    names_to = "resid_type",
+    values_to = "resid"
+  ) %>%
+  group_by(time, resid_type) %>%
+  summarise(
+    q2.5 = quantile(resid, 0.025),
+    q50  = median(resid),
+    q97.5 = quantile(resid, 0.975),
+    .groups = "drop"
+  ) %>%
+  pivot_wider(
+    names_from = resid_type,
+    values_from = c(q2.5, q50, q97.5),
+    names_sep = "_"
+  )
+
+```
+
+MERGE RAW RESIDUALS WITH RESIDUAL QUANTILES
+
+```{r}
+
+resid_full <- left_join(resid_all, resid_summary, by = "time")
+
+```
+
+PLOT RESIDUALS OVER TIME
+
+```{r}
+#RESIDUALS OVER TIME FOR ALGAE
+
+ggplot(resid_full) +
+  geom_ribbon(aes(x = time, y = q50_N1_resid, ymin = q2.5_N1_resid, ymax = q97.5_N1_resid), alpha = 0.3) +
+  geom_point(aes(x=time, y= N1_resid, color = as.factor(replicate))) +
+  geom_smooth(aes(x= time, y= q50_N1_resid)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  theme_minimal() +
+  labs(title = "Posterior Residuals Over Time - Algae", y = "Residuals (Observed - Predicted)")
+```
+
+```{r}
+#RESIDUALS OVER TIME FOR DAPHNIA
+
+ggplot(resid_full) +
+  geom_ribbon(aes(x = time, y = q50_N2_resid, ymin = q2.5_N2_resid, ymax = q97.5_N2_resid), alpha = 0.3) +
+  geom_point(aes(x=time, y= N2_resid, color = as.factor(replicate))) +
+  geom_smooth(aes(x= time, y= q50_N2_resid)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  theme_minimal() +
+  labs(title = "Posterior Residuals Over Time - Daph", y = "Residuals (Observed - Predicted)")
+```
+
+```{r}
+ggplot(resid_full) +
+  geom_ribbon(aes(x = time, y = q50_N3_resid, ymin = q2.5_N3_resid, ymax = q97.5_N3_resid), alpha = 0.3) +
+  geom_point(aes(x=time, y= N3_resid, color = as.factor(replicate))) +
+  geom_smooth(aes(x= time, y= q50_N3_resid)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  theme_minimal() +
+  labs(title = "Posterior Residuals Over Time - Hydra", y = "Residuals (Observed - Predicted)")
+```
+
+```{r}
+ggplot(resid_full, aes(x = time, y = N1_resid)) +
+  geom_smooth() +
+  facet_wrap(~ as.factor(replicate), scales = "free_y") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  theme_minimal() +
+  labs(
+    title = "Algae Residuals Over Time by Replicate",
+    x = "Time",
+    y = "Residuals"
+  )
+
+ggplot(resid_full, aes(x = time, y = N2_resid)) +
+  geom_smooth() +
+  facet_wrap(~ as.factor(replicate), scales = "free_y") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  theme_minimal() +
+  labs(
+    title = "Daph Residuals Over Time by Replicate",
+    x = "Time",
+    y = "Residuals"
+  )
+
+ggplot(resid_full, aes(x = time, y = N3_resid)) +
+  geom_smooth() +
+  facet_wrap(~ as.factor(replicate), scales = "free_y") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  theme_minimal() +
+  labs(
+    title = "Daph Residuals Over Time by Replicate",
+    x = "Time",
+    y = "Residuals"
+  )
+
+```
+
