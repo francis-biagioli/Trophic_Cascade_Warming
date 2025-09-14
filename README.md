@@ -90,3 +90,8 @@ STEP 7: GENERATE SUPPLIMENTAL FIGURES AND TABLES
 -Includes files to:
   1)Create trace plots for each estimated parameter.
   2)Generate summary statistic tables from Stan fits.
+
+OPTIONAL: RUN CHECK ON FIT RESIDUALS
+-Navigate to Residuals Check/ folder
+
+-Includes files to check residuals over time for each replicate for each temp and community treatment
